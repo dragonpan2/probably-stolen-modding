@@ -131,6 +131,6 @@ Probably Stolen/
  
 Just copy the single `TestMod.dll` file. Nothing else needed for this simple mod.
  
-### 7B: Run the game
+### Run the game and activate the mod
  
-Launch the game, if everything is done correctly your mod should be visible in the Mod interface. Enable your mod and restart your game. After restarting the game your mod will be active.
+Launch the game, if everything is done correctly your mod should be visible in the Mod interface. Enable your mod and restart your game. After restarting the game your mod will be active. Open the Console via F8 key and if your mod will display [TestMod] Hello from Test Mod! The modding system works! on the console.
