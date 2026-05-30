@@ -1,6 +1,3 @@
-<<<<<<< Updated upstream
-
-=======
 # Probably Stolen — Modding Guide
 
 This guide covers advanced topics for mod development and assumes you have already read the [README.md](README.md) quick start. For modding community rules, see [CodeOfConduit.md](CodeOfConduit.md).
@@ -199,4 +196,3 @@ public static class TweakClient
 ```
 
 See the [Harmony documentation](https://harmony.pardeike.net/) for the full reference, including injection parameter names (`__instance`, `__state`, `___privateField`, etc.).
->>>>>>> Stashed changes

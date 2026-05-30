@@ -18,21 +18,6 @@ This is a beginner friendly introduction about developing mods for Probably Stol
 
 ## Requirements
 
-## Table of Contents
-- [Requirements](#requirements)
-- [Folder Setup](#folder-setup)
-- [Creating your first Mod](#creating-your-first-mod-for-probably-stolen)
-  - [Create the mod project](#create-the-mod-project)
-  - [Edit TestMod.csproj](#edit-testmodcsproj)
-  - [Create your manifest.xml](#create-your-manifestxml)
-  - [Write your mod](#write-your-mod)
-  - [Build the mod](#build-the-mod)
-- [Install and Test the Mod](#install-and-test-the-mod)
-  - [Create the mod folder](#create-the-mod-folder)
-  - [Run the game and activate the mod](#run-the-game-and-activate-the-mod)
-- [Save File Responsibility](#save-file-responsibility)
-
-<a name="requirements"></a>
 To start developing mods for Probably Stolen, you will need:
 - A digital copy of Probably Stolen in order to access the .dll files
 - Some knowledge of programming in C#
@@ -40,11 +25,6 @@ To start developing mods for Probably Stolen, you will need:
 
 Probably Stolen uses Harmony to allow modders to patch in-game functions. Additionally, modders can append actions to the pre-defined hook points purposely exposed for modding. While Harmony patches are more powerful and flexible, using actions via hook points is more performant and should be preferred over Harmony patching when possible.
 
-<<<<<<< Updated upstream
-<a name="folder-setup"></a>
-
-Recommended folder setup.
-=======
 ## Folder Setup
 
 The `Probably Stolen/` folder referenced throughout this guide is the **game install folder** — the directory that contains `Probably Stolen.exe`. If you bought the game on Steam, you can locate it by right-clicking *Probably Stolen* in your Steam library → **Manage** → **Browse local files**.
@@ -58,7 +38,6 @@ With Steam's default install settings, this folder is typically at:
 If you installed Steam or the game to a different drive or library, the path will reflect that location instead — use "Browse local files" to confirm.
 
 Recommended folder setup:
->>>>>>> Stashed changes
 
 The Mods folder is used to let the game discover ready-to-install mods.
 The Modding folder is used for mod developers.
@@ -239,22 +218,4 @@ Copy the `TestMod.dll` file and your `manifest.xml` into the mod folder. Both fi
 
 ### Run the game and activate the mod
 
-<<<<<<< Updated upstream
-Launch the game. If everything is set up correctly, your mod should be visible in the mod menu. Enable your mod and restart the game. After restarting, your mod will be active. Open the console via the F8 key — if your mod is working, it will display `[TestMod] Hello from Test Mod! The modding system works!`.
-
-## Save File Responsibility
-
-Player saves are permanent and belong to the player. As a mod author, you are responsible for how your mod interacts with them.
-
-**Never:**
-- Delete save files
-- Corrupt saves silently (e.g. writing invalid data that breaks loading)
-
-**If your mod affects saves:**
-- Warn players clearly in your mod's description before they install it
-- Provide a safe uninstall path — document what the player needs to do before disabling your mod to avoid losing progress
-
-**Rule of thumb:** A player should be able to disable your mod without losing progress unless this is clearly stated upfront.
-=======
 Launch the game. If everything is set up correctly, your mod should be visible in the mod menu. Enable your mod and restart the game. After restarting, your mod will be active. Open the console via the F8 key, scroll up — if your mod is working, it will display `[Test Mod]: Hello from Test Mod! The modding system works!`.
->>>>>>> Stashed changes
