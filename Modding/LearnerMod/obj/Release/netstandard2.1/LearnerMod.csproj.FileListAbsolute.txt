@@ -1,0 +1,10 @@
+C:\Users\Bei Ning\Downloads\Probably Stolen 047 Modding\Modding\LearnerMod\bin\Release\netstandard2.1\LearnerMod.deps.json
+C:\Users\Bei Ning\Downloads\Probably Stolen 047 Modding\Modding\LearnerMod\bin\Release\netstandard2.1\LearnerMod.dll
+C:\Users\Bei Ning\Downloads\Probably Stolen 047 Modding\Modding\LearnerMod\bin\Release\netstandard2.1\LearnerMod.pdb
+C:\Users\Bei Ning\Downloads\Probably Stolen 047 Modding\Modding\LearnerMod\obj\Release\netstandard2.1\LearnerMod.csproj.AssemblyReference.cache
+C:\Users\Bei Ning\Downloads\Probably Stolen 047 Modding\Modding\LearnerMod\obj\Release\netstandard2.1\LearnerMod.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Bei Ning\Downloads\Probably Stolen 047 Modding\Modding\LearnerMod\obj\Release\netstandard2.1\LearnerMod.AssemblyInfoInputs.cache
+C:\Users\Bei Ning\Downloads\Probably Stolen 047 Modding\Modding\LearnerMod\obj\Release\netstandard2.1\LearnerMod.AssemblyInfo.cs
+C:\Users\Bei Ning\Downloads\Probably Stolen 047 Modding\Modding\LearnerMod\obj\Release\netstandard2.1\LearnerMod.csproj.CoreCompileInputs.cache
+C:\Users\Bei Ning\Downloads\Probably Stolen 047 Modding\Modding\LearnerMod\obj\Release\netstandard2.1\LearnerMod.dll
+C:\Users\Bei Ning\Downloads\Probably Stolen 047 Modding\Modding\LearnerMod\obj\Release\netstandard2.1\LearnerMod.pdb

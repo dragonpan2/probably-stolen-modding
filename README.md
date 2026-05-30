@@ -1,5 +1,22 @@
 # probably-stolen-modding
-This is a beginner friendly guide and examples about developing mods for Probably Stolen.
+This is a beginner friendly introduction about developing mods for Probably Stolen. Read this before reading the Advanced Guide.
+
+## Table of Contents
+- [probably-stolen-modding](#probably-stolen-modding)
+  - [Table of Contents](#table-of-contents)
+  - [Requirements](#requirements)
+  - [Folder Setup](#folder-setup)
+- [Creating your first Mod for Probably Stolen](#creating-your-first-mod-for-probably-stolen)
+    - [Create the mod project](#create-the-mod-project)
+    - [Edit TestMod.csproj](#edit-testmodcsproj)
+    - [Create your manifest.xml](#create-your-manifestxml)
+    - [Write your mod](#write-your-mod)
+    - [Build the mod](#build-the-mod)
+  - [Install and Test the Mod](#install-and-test-the-mod)
+    - [Create the mod folder](#create-the-mod-folder)
+    - [Run the game and activate the mod](#run-the-game-and-activate-the-mod)
+
+## Requirements
 
 ## Table of Contents
 - [Requirements](#requirements)
@@ -23,9 +40,25 @@ To start developing mods for Probably Stolen, you will need:
 
 Probably Stolen uses Harmony to allow modders to patch in-game functions. Additionally, modders can append actions to the pre-defined hook points purposely exposed for modding. While Harmony patches are more powerful and flexible, using actions via hook points is more performant and should be preferred over Harmony patching when possible.
 
+<<<<<<< Updated upstream
 <a name="folder-setup"></a>
 
 Recommended folder setup.
+=======
+## Folder Setup
+
+The `Probably Stolen/` folder referenced throughout this guide is the **game install folder** — the directory that contains `Probably Stolen.exe`. If you bought the game on Steam, you can locate it by right-clicking *Probably Stolen* in your Steam library → **Manage** → **Browse local files**.
+
+With Steam's default install settings, this folder is typically at:
+
+- **Windows:** `C:\Program Files (x86)\Steam\steamapps\common\Probably Stolen\`
+- **macOS:** `~/Library/Application Support/Steam/steamapps/common/Probably Stolen/`
+- **Linux:** `~/.steam/steam/steamapps/common/Probably Stolen/`
+
+If you installed Steam or the game to a different drive or library, the path will reflect that location instead — use "Browse local files" to confirm.
+
+Recommended folder setup:
+>>>>>>> Stashed changes
 
 The Mods folder is used to let the game discover ready-to-install mods.
 The Modding folder is used for mod developers.
@@ -51,8 +84,6 @@ If not done already, create a Modding folder in your Probably Stolen root folder
 
 Using the command line while in the Modding folder:
 ```bash
-mkdir TestMod
-cd TestMod
 dotnet new classlib -n TestMod --framework netstandard2.1
 cd TestMod
 ```
@@ -92,7 +123,17 @@ Replace the contents with:
 
 ### Create your manifest.xml
 
-Every mod requires a `manifest.xml` file in the root of its mod folder. This file contains all the metadata about your mod and must be present for the game to recognize it.
+**`manifest.xml` is mandatory.** Every mod must include one in the root of its mod folder — without it, the game will skip the folder entirely and your mod will not load. This file contains all the metadata about your mod.
+
+```
+Probably Stolen/
+├── Probably Stolen.exe
+└── Modding/
+    └── TestMod/
+        ├── TestMod.cs
+        └── TestMod.csproj
+        └── manifest.xml
+```
 
 Create a file named `manifest.xml` and fill in your mod's information:
 
@@ -105,7 +146,7 @@ Create a file named `manifest.xml` and fill in your mod's information:
   <ModVersion>1.0</ModVersion>
   <Description>A test mod for demonstration purposes.</Description>
   <GameVersions>
-    <Version>045</Version>
+    <Version>047</Version>
   </GameVersions>
   <Prerequisites />
 </Manifest>
@@ -139,20 +180,36 @@ namespace TestMod
 {
     public class Class1 : IMod
     {
-        public void Init()
+        private ModLog log;
+
+        public void Init(ModManifest manifest)
         {
-            Debug.Log("[TestMod] Hello from Test Mod! The modding system works!");
+            log = new ModLog(manifest);
+            log.Log("Hello from Test Mod! The modding system works!");
+        }
+
+        public void OnEnable()
+        {
+            log.Log("Test Mod enabled.");
         }
 
         public void OnDisable()
         {
-            Debug.Log("[TestMod] Test Mod disabled. Goodbye!");
+            log.Log("Test Mod disabled. Goodbye!");
         }
     }
 }
 ```
 
-Note that your mod's name, ID, author, and other details are no longer defined in code — they come entirely from `manifest.xml`.
+The loader reads your mod's name, ID, author, and other details from `manifest.xml` and passes the parsed `ModManifest` to your `Init` method.
+
+Your mod class implements three lifecycle methods that the loader calls at specific points:
+
+- **`Init(ModManifest manifest)`** — called once when the game starts and your mod is loaded. Use it for one-time setup: store the `manifest` reference if you need it later, construct your `ModLog`, cache references, and prepare any resources your mod will need.
+- **`OnEnable()`** — called right after `Init`
+- **`OnDisable()`** — called when the game is shutting down (and, in the future, when the mod is turned off).
+
+> ⚠️ **All three of these methods run from the main menu**, where the mod loader lives. No gameplay systems are initialized until the player loads a save file, so do not try to read save data, spawn items, or interact with in-game managers from `Init` or `OnEnable` — they will not exist yet. 
 
 ### Build the mod
 
@@ -182,6 +239,7 @@ Copy the `TestMod.dll` file and your `manifest.xml` into the mod folder. Both fi
 
 ### Run the game and activate the mod
 
+<<<<<<< Updated upstream
 Launch the game. If everything is set up correctly, your mod should be visible in the mod menu. Enable your mod and restart the game. After restarting, your mod will be active. Open the console via the F8 key — if your mod is working, it will display `[TestMod] Hello from Test Mod! The modding system works!`.
 
 ## Save File Responsibility
@@ -197,3 +255,6 @@ Player saves are permanent and belong to the player. As a mod author, you are re
 - Provide a safe uninstall path — document what the player needs to do before disabling your mod to avoid losing progress
 
 **Rule of thumb:** A player should be able to disable your mod without losing progress unless this is clearly stated upfront.
+=======
+Launch the game. If everything is set up correctly, your mod should be visible in the mod menu. Enable your mod and restart the game. After restarting, your mod will be active. Open the console via the F8 key, scroll up — if your mod is working, it will display `[Test Mod]: Hello from Test Mod! The modding system works!`.
+>>>>>>> Stashed changes

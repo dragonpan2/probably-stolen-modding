@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Manifest>
+  <ID>learner_mod</ID>
+  <Name>Learner Mod</Name>
+  <Author>YourName</Author>
+  <ModVersion>1.0</ModVersion>
+  <Description>An example mod for demonstration purposes.</Description>
+  <GameVersions>
+    <Version>047</Version>
+  </GameVersions>
+  <Prerequisites />
+</Manifest>
