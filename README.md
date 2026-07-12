@@ -27,7 +27,7 @@ Probably Stolen uses Harmony to allow modders to patch in-game functions. Additi
 
 ## Folder Setup
 
-The `Probably Stolen/` folder referenced throughout this guide is the **game install folder** — the directory that contains `Probably Stolen.exe`. If you bought the game on Steam, you can locate it by right-clicking *Probably Stolen* in your Steam library → **Manage** → **Browse local files**.
+The `Probably Stolen/` folder referenced throughout this guide is the **game install folder**: the directory that contains `Probably Stolen.exe`. If you bought the game on Steam, you can locate it by right-clicking *Probably Stolen* in your Steam library → **Manage** → **Browse local files**.
 
 With Steam's default install settings, this folder is typically at:
 
@@ -35,7 +35,7 @@ With Steam's default install settings, this folder is typically at:
 - **macOS:** `~/Library/Application Support/Steam/steamapps/common/Probably Stolen/`
 - **Linux:** `~/.steam/steam/steamapps/common/Probably Stolen/`
 
-If you installed Steam or the game to a different drive or library, the path will reflect that location instead — use "Browse local files" to confirm.
+If you installed Steam or the game to a different drive or library, the path will reflect that location instead. Use "Browse local files" to confirm.
 
 Recommended folder setup:
 
@@ -102,7 +102,7 @@ Replace the contents with:
 
 ### Create your manifest.xml
 
-**`manifest.xml` is mandatory.** Every mod must include one in the root of its mod folder — without it, the game will skip the folder entirely and your mod will not load. This file contains all the metadata about your mod.
+**`manifest.xml` is mandatory.** Every mod must include one in the root of its mod folder; without it, the game will skip the folder entirely and your mod will not load. This file contains all the metadata about your mod.
 
 ```
 Probably Stolen/
@@ -132,13 +132,13 @@ Create a file named `manifest.xml` and fill in your mod's information:
 ```
 
 Field descriptions:
-- **ID** — A unique identifier for your mod. Use lowercase letters and underscores (e.g. `my_cool_mod`). This is required — the game will skip your mod folder if it is missing.
-- **Name** — The display name shown in the mod menu.
-- **Author** — Your name or username.
-- **ModVersion** — The version of your mod.
-- **Description** — A short description of what your mod does.
-- **GameVersions** — The list of game versions your mod is compatible with. Add one `<Version>` entry per supported version.
-- **Prerequisites** — The IDs of other mods that must be loaded before yours. Leave the tag empty (`<Prerequisites />`) if there are none. Add one `<Mod>` entry per dependency:
+- **ID**: A unique identifier for your mod. Use lowercase letters and underscores (e.g. `my_cool_mod`). This is required; the game will skip your mod folder if it is missing.
+- **Name**: The display name shown in the mod menu.
+- **Author**: Your name or username.
+- **ModVersion**: The version of your mod.
+- **Description**: A short description of what your mod does.
+- **GameVersions**: The list of game versions your mod is compatible with. Add one `<Version>` entry per supported version.
+- **Prerequisites**: The IDs of other mods that must be loaded before yours. Leave the tag empty (`<Prerequisites />`) if there are none. Add one `<Mod>` entry per dependency:
 
 ```xml
 <Prerequisites>
@@ -184,11 +184,11 @@ The loader reads your mod's name, ID, author, and other details from `manifest.x
 
 Your mod class implements three lifecycle methods that the loader calls at specific points:
 
-- **`Init(ModManifest manifest)`** — called once when the game starts and your mod is loaded. Use it for one-time setup: store the `manifest` reference if you need it later, construct your `ModLog`, cache references, and prepare any resources your mod will need.
-- **`OnEnable()`** — called right after `Init`
-- **`OnDisable()`** — called when the game is shutting down (and, in the future, when the mod is turned off).
+- **`Init(ModManifest manifest)`**: called once when the game starts and your mod is loaded. Use it for one-time setup: store the `manifest` reference if you need it later, construct your `ModLog`, cache references, and prepare any resources your mod will need.
+- **`OnEnable()`**: called right after `Init`
+- **`OnDisable()`**: called when the game is shutting down (and, in the future, when the mod is turned off).
 
-> ⚠️ **All three of these methods run from the main menu**, where the mod loader lives. No gameplay systems are initialized until the player loads a save file, so do not try to read save data, spawn items, or interact with in-game managers from `Init` or `OnEnable` — they will not exist yet. 
+> ⚠️ **All three of these methods run from the main menu**, where the mod loader lives. No gameplay systems are initialized until the player loads a save file, so do not try to read save data, spawn items, or interact with in-game managers from `Init` or `OnEnable`; they will not exist yet. 
 
 ### Build the mod
 
@@ -218,4 +218,4 @@ Copy the `TestMod.dll` file and your `manifest.xml` into the mod folder. Both fi
 
 ### Run the game and activate the mod
 
-Launch the game. If everything is set up correctly, your mod should be visible in the mod menu. Enable your mod and restart the game. After restarting, your mod will be active. Open the console via the F8 key, scroll up — if your mod is working, it will display `[Test Mod]: Hello from Test Mod! The modding system works!`.
+Launch the game. If everything is set up correctly, your mod should be visible in the mod menu. Enable your mod and restart the game. After restarting, your mod will be active. Open the console via the F8 key, scroll up. If your mod is working, it will display `[Test Mod]: Hello from Test Mod! The modding system works!`.

@@ -1,4 +1,4 @@
-# Probably Stolen — Modding Code of Conduct
+# Probably Stolen: Modding Code of Conduct
 
 Modding is a privilege extended to the community in good faith. We ask all mod authors to respect the following rules.
 

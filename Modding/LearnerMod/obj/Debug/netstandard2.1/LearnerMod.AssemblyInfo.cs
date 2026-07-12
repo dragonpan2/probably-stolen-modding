@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("LearnerMod")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+51563788b9ac01d882973d8b097190ba968b1f54")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9fcd2c6305cd95c599faa436bdf3f2d0c2456c94")]
 [assembly: System.Reflection.AssemblyProductAttribute("LearnerMod")]
 [assembly: System.Reflection.AssemblyTitleAttribute("LearnerMod")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
