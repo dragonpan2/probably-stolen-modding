@@ -1,6 +1,23 @@
 # Probably Stolen: Modding API Changes
 
+中文版本：[APIChanges.zh-CN.md](APIChanges.zh-CN.md)
+
 What changed in the modding API, per game update, newest on top. Within each update, entries are ordered by importance: things you must act on first, new capabilities last. Full documentation lives in [ModdingGuide.md](ModdingGuide.md).
+
+## Next update (in development)
+
+**Action recommended**
+
+- **Stop patching `TableMaster` / `TableGroupMaster` for loot changes.** Their static dictionaries are gone; rolls now go through `LootRegistry`, which has a supported API for exactly that. [Details](ModdingGuide.md#loot-tables)
+
+**New**
+
+- **Loot table editing.** Add your items to the game's drop tables, change or remove existing drops, and register new tables and groups: `ModHelper.AddLootEntry / SetLootWeight / RemoveLootEntry / RegisterLootTable` and the `Group` equivalents, callable from `OnEnable`. Weights are relative and vanilla tables sum to 1000, so weight `10` is about 1%. [Details](ModdingGuide.md#loot-tables)
+- **JSON loot files.** The same edits as data: `LootTables/*.json` in your mod folder, no C# needed. [Details](ModdingGuide.md#editing-tables-with-json-files)
+- **`ModHook.OnLootTablesLoaded`** (tables are ready, all edits applied) and **`ModHook.OnLootRolled(LootRollContext)`** (override the result of any roll). [Details](ModdingGuide.md#reacting-to-rolls)
+- **Console commands** `loot-list [id]` and `loot-roll <id> [count]` to see effective odds, which mod touched what, and to test-roll a table. [Details](ModdingGuide.md#inspecting-tables-in-the-console)
+- **Mod data store.** Save anything not tied to an item with `ModHelper.SetModData / GetModData` (plus `Int`, `Float`, `Bool` variants, `HasModData`, `RemoveModData`, `GetModDataKeys`, `ClearModData`). Namespaced by mod id, saved with the run, restored on load. [Details](ModdingGuide.md#saving-mod-data)
+- **Custom UI.** Build your own windows from code with the `CustomUIManager` fluent builder (labels, buttons, toggles, sliders, inputs, dropdowns, progress bars, images, tabs, scroll lists), on any game canvas or a persistent overlay. Mod sprites work through the `"modId:spriteName"` key. Custom UI moves from the "not supported" list to supported. [Details](ModdingGuide.md#custom-ui)
 
 ## July 2026
 
@@ -20,4 +37,4 @@ What changed in the modding API, per game update, newest on top. Within each upd
 
 **Policy**
 
-- **Decompilation: look, don't copy.** Decompiling the game to study it and find patch targets is officially tolerated; redistributing game code or assets is not. [Full policy](CodeOfConduit.md#decompilation-policy)
+- **Decompilation: look, don't copy.** Decompiling the game to study it and find patch targets is officially tolerated; redistributing game code or assets is not. [Full policy](CodeOfConduct.md#respect-other-creators)

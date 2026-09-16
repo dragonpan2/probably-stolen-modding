@@ -1,6 +1,10 @@
 # Probably Stolen: Modding Guide
 
-This guide covers advanced topics for mod development and assumes you have already read the [README.md](README.md) quick start. For modding community rules, see [CodeOfConduit.md](CodeOfConduit.md). Updating a mod after a game update? Check [APIChanges.md](APIChanges.md) for what changed in the modding API.
+中文版本：[ModdingGuide.zh-CN.md](ModdingGuide.zh-CN.md)
+
+This guide covers advanced topics for mod development and assumes you have already read the [README.md](README.md) quick start. For modding community rules, see [CodeOfConduct.md](CodeOfConduct.md). Updating a mod after a game update? Check [APIChanges.md](APIChanges.md) for what changed in the modding API.
+
+> **Disclaimer.** This guide was written with AI assistance and reviewed by the developers. Code snippets and API names were checked against the game's source, but mistakes can slip through. If something here does not match what the game does, trust the game and report the discrepancy through the community channels so the guide can be fixed.
 
 ## Table of Contents
 - [Probably Stolen: Modding Guide](#probably-stolen-modding-guide)
@@ -22,6 +26,14 @@ This guide covers advanced topics for mod development and assumes you have alrea
     - [Subscribing to a hook](#subscribing-to-a-hook)
     - [Adding items through the item directory hook](#adding-items-through-the-item-directory-hook)
     - [Available hooks](#available-hooks)
+  - [Loot Tables](#loot-tables)
+    - [Weights](#weights)
+    - [Editing tables from code](#editing-tables-from-code)
+    - [Editing tables with JSON files](#editing-tables-with-json-files)
+    - [Reacting to rolls](#reacting-to-rolls)
+    - [Inspecting tables in the console](#inspecting-tables-in-the-console)
+  - [Saving Mod Data](#saving-mod-data)
+  - [Custom UI](#custom-ui)
   - [Harmony Patches](#harmony-patches)
     - [Patches are applied automatically](#patches-are-applied-automatically)
     - [Postfix: run code after the original](#postfix-run-code-after-the-original)
@@ -106,10 +118,11 @@ Not every kind of mod is feasible right now. Before you start a project, check t
 - **Modded items with custom sprites**: add new items to the game, including their artwork
 - **Modded customers with custom sprites**: add new customers with their own appearance
 - **Modded events**: add new in-game events
+- **Loot table edits**: put your items into the game's drop tables, change or remove existing drops, or add whole new tables, from code or from a JSON file ([Loot Tables](#loot-tables))
+- **Custom UI**: build your own windows and panels (settings, inspectors, counters) from code, using the game's widgets ([Custom UI](#custom-ui))
 
 ### ❌ Not supported at the moment
 
-- **Custom UI**: adding entirely new UI panels or screens
 - **Major changes to existing UI**: restructuring or replacing built-in UI
 - **Changes to the store**: modifying the store's behavior or contents
 - **Overhaul-style mods**: sweeping reworks that touch many systems at once
@@ -135,12 +148,14 @@ Mods/
     │       └── health_pack.png → item sprite, key "health_pack"
     ├── Sounds/
     │   └── ding.wav            → sound, key "ding"
-    └── Localization/
-        ├── en.csv              → strings for the "en" locale
-        └── fr.csv              → strings for the "fr" locale
+    ├── Localization/
+    │   ├── en.csv              → strings for the "en" locale
+    │   └── fr.csv              → strings for the "fr" locale
+    └── LootTables/
+        └── drops.json          → loot table edits, see Loot Tables
 ```
 
-> ⚠️ **The folder names are exact, and scanning is not recursive.** Item sprites must sit *directly* in `Textures/Items/`; sounds *directly* in `Sounds/`; localization files *directly* in `Localization/`. A PNG in `Textures/Sprites/` or any nested subfolder is silently ignored. Supported image formats: `.png`, `.jpg`. Supported audio: `.wav`, `.ogg`, `.mp3`. Localization: `.csv`.
+> ⚠️ **The folder names are exact, and scanning is not recursive.** Item sprites must sit *directly* in `Textures/Items/`; sounds *directly* in `Sounds/`; localization files *directly* in `Localization/`; loot files *directly* in `LootTables/`. A PNG in `Textures/Sprites/` or any nested subfolder is silently ignored. Supported image formats: `.png`, `.jpg`. Supported audio: `.wav`, `.ogg`, `.mp3`. Localization: `.csv`. Loot tables: `.json`.
 
 Each mod logs what it loaded, so you can confirm in the F8 console:
 
@@ -362,6 +377,230 @@ Replace `*` with a tier name, e.g. `ModHook.OnGenerateCustomerVeryEarly`, `ModHo
 | `OnPlaceInventorInventoryItem*` | Early, Late | Items are placed into an inventory | `List<GameItem>` |
 | `OnCreateTooltip*` / `OnCreateDevTooltip*` | Early, Late | An item tooltip is being built (append your own lines) | `RichTextBuilder`, `GameItem` |
 | `OnModAssetsLoaded` | none | A mod's assets (textures, item sprites, sounds, localization) have all finished loading (fires once per enabled mod; check the mod is yours) | `LoadedMod` |
+| `OnLootTablesLoaded` | none | The loot tables have loaded and every mod edit has been applied (once per scene load) | none |
+| `OnLootRolled` | none | A loot table was rolled; set `context.itemId` to override the result ([details](#reacting-to-rolls)) | `LootRollContext` |
+
+---
+
+## Loot Tables
+
+Random drops (scavenging finds, supplier stock, what some customers bring in) are rolled from named **loot tables**: weighted lists of item IDs. **Table groups** are weighted lists of loot tables; rolling a group first picks a table, then rolls it. Mods can add items to existing tables, change or remove entries, and register new tables and groups, either from code or from a JSON file with no code at all.
+
+Edits are stored separately from the game's data and re-applied every time the tables load, so they survive scene changes, never modify game files, and can be made at any time, including from `OnEnable` before any table exists.
+
+Vanilla IDs (the live list, including other mods' additions, is one `loot-list` away in the [console](#inspecting-tables-in-the-console)):
+
+| Loot table | What it feeds |
+|---|---|
+| `junkTable` | Scrap and junk finds |
+| `materialTable` | Crafting materials |
+| `packedFoodTable` | Cheap packaged food (supplier stock, food customers, stocked fridges) |
+| `householdTable` | Household goods |
+| `medicalTable`, `dumpingGroundMedical` | Medical supplies |
+| `toolTable` | Tools |
+| `makeshiftWeaponTable` | Improvised weapons |
+| `t1moduleTable`, `t2moduleTable`, `allModuleTable` | Modules by tier |
+| `accessCardTable` | Access cards |
+| `POI_dumpingGround` | Expedition points of interest (IDs are POIs, not items) |
+
+| Table group | What it feeds |
+|---|---|
+| `dumpingGroundTG` | Scavenging at the dumping grounds |
+| `dumpingGroundFreshTG` | Fresh dumping-ground scavenging |
+
+### Weights
+
+Every entry has a weight, and an entry's chance is its weight divided by the total weight of its table. Vanilla tables are scaled so their entries **sum to 1000**, which makes weights easy to read:
+
+| Weight | Chance in an untouched vanilla table |
+|---|---|
+| `100` | about 10% |
+| `10` | about 1% |
+| `1` | about 0.1% |
+| `0.5` | about 0.05% |
+
+Weights are relative, so adding entries dilutes the others: adding weight `10` to a vanilla table gives your item 10 / 1010, or 0.99%, and shrinks everything else by the same 1%. Decimals are fine. Weight `0` keeps an entry in the table but it never rolls; adding an entry with a weight of 0 or less is rejected.
+
+### Editing tables from code
+
+Call from `OnEnable`; there is nothing to wait for. Pass your manifest `<ID>` as the first argument so the console can show which mod made each edit.
+
+```csharp
+public void OnEnable()
+{
+    // Put your item in the junk pile at about 1% of rolls
+    ModHelper.AddLootEntry("my_mod_id", "junkTable", "my_item", 10);
+
+    // Make an existing drop rarer, or remove it entirely
+    ModHelper.SetLootWeight("my_mod_id", "packedFoodTable", "cup_noodle", 20);
+    ModHelper.RemoveLootEntry("my_mod_id", "packedFoodTable", "zerochew");
+
+    // A new table, then give it a share of dumping-ground scavenging
+    ModHelper.RegisterLootTable("my_mod_id", "my_table", ("my_item", 700), ("my_rare_item", 300));
+    ModHelper.AddLootGroupEntry("my_mod_id", "dumpingGroundTG", "my_table", 50);
+}
+```
+
+Rules:
+
+- `AddLootEntry` for an item that is already in the table **replaces its weight** rather than adding a duplicate.
+- `RegisterLootTable` fails (with a console warning) if the ID already exists. To rebuild a vanilla table from scratch, call `ClearLootTable` and then add entries.
+- Table groups have the same set of calls with `Group` in the name: `RegisterLootGroup`, `AddLootGroupEntry`, `RemoveLootGroupEntry`, `SetLootGroupWeight`, `ClearLootGroup`. Their entries are loot table IDs.
+- Item IDs are not checked when you add them. Register your items through [`OnModItemDirectoryInit`](#adding-items-through-the-item-directory-hook); an unknown ID rolls the "unknown" placeholder item.
+- Every warning about a bad edit starts with `[LootRegistry]` and names your mod.
+
+To roll or inspect a table yourself: `ModHelper.RollLootTable(id)` returns an item ID, `ModHelper.SpawnFromLootTable(id)` spawns it, and `ModHelper.GetLootEntries(id)` returns a snapshot of the entries with their weights and the mod that added each (`sourceModId` is `null` for vanilla entries). Group versions: `RollLootGroup`, `SpawnFromLootGroup`, `GetLootGroupEntries`.
+
+### Editing tables with JSON files
+
+The same edits can ship as data. Drop one or more `.json` files directly in a `LootTables/` folder in your mod folder; they load with your other assets and every edit is attributed to your mod. Any of the three top-level lists can be left out.
+
+```json
+{
+  "tables": [
+    { "id": "my_table", "entries": [ { "id": "my_item", "weight": 700 }, { "id": "my_rare_item", "weight": 300 } ] }
+  ],
+  "groups": [
+    { "id": "my_group", "entries": [ { "id": "my_table", "weight": 800 }, { "id": "junkTable", "weight": 200 } ] }
+  ],
+  "patches": [
+    {
+      "table": "junkTable",
+      "add": [ { "id": "my_item", "weight": 10 } ],
+      "remove": [ "rusty_can" ],
+      "setWeight": [ { "id": "cup_noodle", "weight": 20 } ]
+    },
+    { "group": "dumpingGroundTG", "add": [ { "id": "my_table", "weight": 50 } ] },
+    { "table": "accessCardTable", "clear": true, "add": [ { "id": "my_card", "weight": 1000 } ] }
+  ]
+}
+```
+
+- `tables` and `groups` create new lists; `patches` edit existing ones (vanilla or from any mod, including your own `tables`).
+- A patch names exactly one of `table` or `group`. Inside a patch, `clear` runs first, then `add`, `remove`, `setWeight`.
+- Within a file the order is tables, then groups, then patches; several files apply in alphabetical order. Register a table before patching or grouping it.
+- The loader logs `[ModLoader] My Mod: 1 loot file(s): 1 table(s), 1 group(s), 3 patch(es) loaded`; an unreadable file is skipped with an error naming it.
+
+### Reacting to rolls
+
+`ModHook.OnLootTablesLoaded` fires once the tables exist and every mod edit is in, so it is the moment to read the final state of a table with `GetLootEntries`.
+
+`ModHook.OnLootRolled` fires after every roll, from any table, with a `LootRollContext`: `tableId`, `groupId` (the group that picked the table, or `null` for a direct roll), and `itemId`. Assign `itemId` to replace the result:
+
+```csharp
+public void OnEnable()  => ModHook.OnLootRolled += OnLootRolled;
+public void OnDisable() => ModHook.OnLootRolled -= OnLootRolled;
+
+void OnLootRolled(LootRollContext context)
+{
+    // one scavenging find in twenty becomes your item, whatever table it came from
+    if (context.groupId == "dumpingGroundTG" && UnityEngine.Random.value < 0.05f)
+        context.itemId = "my_item";
+}
+```
+
+Prefer weights over this hook for ordinary drop changes; it runs on every roll and later mods see the value you set.
+
+### Inspecting tables in the console
+
+The F8 console has two commands. `loot-list` prints every table and group; `loot-list <id>` prints one with its effective percentages and which mod added or changed each entry; `loot-roll <id> [count]` rolls it and tallies the results.
+
+```
+> loot-list junkTable
+Loot table 'junkTable': 9 entries, total weight 1010 (vanilla tables sum to 1000)
+  rusty_can                        weight   250.000   24.752%
+  ...
+  my_item                          weight    10.000    0.990%  (added by my_mod_id)
+
+> loot-roll junkTable 1000
+Loot table 'junkTable', 1000 roll(s):
+  rusty_can                            244   24.40%
+  ...
+```
+
+If your item is missing from `loot-list`, the table ID is wrong or the edit was rejected; look for a `[LootRegistry]` warning in the console.
+
+---
+
+## Saving Mod Data
+
+Mods often need to remember something that is not tied to an item: a quest step, a counter, a flag, a small settings blob. `ModHelper` gives every mod a key/value store that is saved with the player's run.
+
+```csharp
+// Write. Keys are namespaced by your mod id, so use whatever names you like.
+ModHelper.SetModDataInt("my_mod_id", "deliveries", 3);
+ModHelper.SetModDataBool("my_mod_id", "met_courier", true);
+ModHelper.SetModData("my_mod_id", "route", JsonUtility.ToJson(routeState));
+
+// Read, with a fallback for when the key was never written.
+int deliveries = ModHelper.GetModDataInt("my_mod_id", "deliveries", 0);
+bool met = ModHelper.GetModDataBool("my_mod_id", "met_courier");
+RouteState route = JsonUtility.FromJson<RouteState>(ModHelper.GetModData("my_mod_id", "route", "{}"));
+
+// Housekeeping
+ModHelper.HasModData("my_mod_id", "route");
+ModHelper.RemoveModData("my_mod_id", "route");
+ModHelper.GetModDataKeys("my_mod_id");   // every key you have stored, without the prefix
+ModHelper.ClearModData("my_mod_id");     // wipe everything your mod stored in this run
+```
+
+Rules:
+
+- **It is per run.** The data is part of the save slot: written every time the game saves (each night), restored on load, and empty on a new game. Anything you write before the player sleeps is in that night's save. A write after the save has run is kept in memory and lands in the next one.
+- **Available while a run is loaded.** Read from `ModHook.OnGameLoadedInit` onward. Calls made in the main menu, or before a run is loaded, do nothing and return the fallback, with a warning for writes.
+- **Values are strings.** The game never has to know your types, so the save stays loadable even if your mod is updated or removed. For structured data, serialise to JSON yourself; `JsonUtility` is the easiest. The `Int`, `Float` and `Bool` helpers format and parse for you, culture-invariant.
+- **Disabled mods keep their data.** Nothing is pruned when a mod is turned off, so re-enabling restores its state. If your mod wants a clean slate, call `ClearModData` yourself.
+- **Keep it small.** The store is written with every save. Kilobytes are fine; do not stash large blobs or per-frame data in it.
+- **It is not for items.** Anything that belongs to a specific item goes on that item's tags (`item.ModifyTag` / `GetTagReadonly`), which are saved with the item and travel with it.
+
+---
+
+## Custom UI
+
+Mods can build their own windows at runtime (settings panels, inspectors, counters...) through `CustomUIManager`, a fluent C# builder over the game's UI prefabs. No Unity project, prefabs, or editor work is needed on the mod side; the game supplies the widgets and you compose them from code.
+
+```csharp
+CustomUIManager.Window("my_mod_id.settings", "My Mod Settings", CustomUIManager.LAYER_PAPER)
+    .SetSize(400, 300)
+    .SetDraggable(true)
+    .AddLabel("General")
+    .AddToggle("Enable feature", true, v => featureOn = v, id: "feature")
+    .AddSlider(0f, 100f, 50f, v => amount = v, wholeNumbers: true, id: "amount")
+    .AddInput("Enter a name...", "", v => name = v)
+    .AddDropdown(new[] { "Low", "Medium", "High" }, 1, i => quality = i)
+    .AddProgressBar(0.3f, id: "progress")
+    .AddImage("my_mod_id:health_pack")   // an item sprite from Textures/Items
+    .BeginRow()
+        .AddFlexibleSpace()
+        .AddButton("Apply", Apply).WithTooltip("Saves the settings")
+        .AddButton("Close", () => CustomUIManager.Instance.CloseWindow("my_mod_id.settings"))
+    .End()
+    .Show();
+```
+
+- `CustomUIManager.Window(id, title, layer)` starts a window and replaces any existing window with the same id. Prefix ids with your mod id to avoid collisions with other mods. `Show()` finishes the chain and returns a `CustomUIWindow`; `GetWindow()` returns it hidden instead.
+- Widgets: `AddLabel`, `AddButton`, `AddImage`, `AddToggle`, `AddSlider`, `AddInput`, `AddDropdown`, `AddProgressBar`, `AddSpace`, `AddFlexibleSpace`. Pass an `id` to any widget you want to update later.
+- Layout: `BeginRow` / `BeginColumn` / `BeginGrid(columns, cellWidth, cellHeight)` / `BeginScroll(height)`, each closed with `End()`. Tabs: `BeginTabs()`, then one `BeginTab("Name") ... End()` per tab, then `EndTabs()`.
+- Window options: `SetSize`, `SetPosition`, `Center`, `SetDraggable`, `SetCloseOnEscape`, `OnClose(callback)`. `WithTooltip(text)` attaches a hover tooltip to the last added element.
+- Layers decide which canvas hosts the window: `LAYER_PAPER` (books and documents, most normal UI), `LAYER_FRONT`, `LAYER_REAR`, `LAYER_META` (options and escape menu) in the game scene, `LAYER_MENU` in the main menu, and `LAYER_OVERLAY`, the manager's own canvas that survives scene changes. Windows on a scene layer are destroyed with the scene, so rebuild them when needed, for example from `ModHook.OnGameLoadedNormal`. Targeting a layer that does not exist in the current scene falls back to the overlay with a warning.
+
+Update a window later through the handles:
+
+```csharp
+CustomUIWindow window = CustomUIManager.Instance.GetWindow("my_mod_id.settings");
+window.Get("progress").SetProgress(0.7f, "70%");
+window.Get("feature").SetBool(false);      // silent; pass notify: true to fire the callback
+bool on = window.Get("feature").GetBool();
+window.Hide(); window.Show(); window.Close(); // Close destroys and unregisters the window
+```
+
+Element setters are null-safe: calling a slider method on a label logs a warning and does nothing, so a wrong id never throws into the game's UI loop. `AddImage("key")` and `SetSprite("key")` accept the game's own sprite keys and your mod's item sprites in the `"modId:spriteName"` form (the sprite key is the file name from `Textures/Items/`, see [Item sprites](#item-sprites)).
+
+Rules of thumb:
+
+- Guard with `CustomUIManager.Instance != null` before building.
+- Build UI that uses your mod's sprites no earlier than [`ModHook.OnModAssetsLoaded`](#knowing-when-your-assets-are-ready).
+- `SetCloseOnEscape` is opt-in because the game also handles Escape globally in the store scene; test for conflicts with your window open.
 
 ---
 
@@ -469,3 +708,5 @@ Open the **F8 console** first: every mod logs its load result, asset counts, and
 | `GetLocalized` returns the key itself | No entry for that key in the current locale's CSV or in `en.csv`, or the file name doesn't match the game's locale code. Look for the one-time `[ModHelper]` warning and check the `localization entries loaded` count in the console. |
 | `requires '<id>' which is not loaded/enabled` warning | Your manifest lists a `<Prerequisites>` mod that isn't enabled. Enable it, or drop the dependency. |
 | Harmony patch never runs | The target type/method name is wrong, or the mod is disabled; patches are only applied to **enabled** mods, at launch. |
+| My item never drops | Run `loot-list <tableId>` in the console. If the entry is missing, the table ID is wrong or the edit was rejected (look for a `[LootRegistry]` warning naming your mod). If it is there, check the percentage: weight `10` in a vanilla table is about 1%. |
+| `[LootRegistry] ... which does not exist` warning | The table or group ID in your edit or JSON file does not match any table. `loot-list` prints every ID. When registering your own table, register it before patching or grouping it. |

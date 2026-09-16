@@ -1,5 +1,8 @@
 # probably-stolen-modding
-This is a beginner friendly introduction about developing mods for Probably Stolen. Read this before reading the Advanced Guide.
+
+中文版本：[README.zh-CN.md](README.zh-CN.md)
+
+This is a beginner friendly introduction about developing mods for Probably Stolen. Read this before reading the [Modding Guide](ModdingGuide.md).
 
 ## Table of Contents
 - [probably-stolen-modding](#probably-stolen-modding)
@@ -125,7 +128,7 @@ Create a file named `manifest.xml` and fill in your mod's information:
   <ModVersion>1.0</ModVersion>
   <Description>A test mod for demonstration purposes.</Description>
   <GameVersions>
-    <Version>047</Version>
+    <Version>049</Version>
   </GameVersions>
   <Prerequisites />
 </Manifest>
@@ -218,4 +221,4 @@ Copy the `TestMod.dll` file and your `manifest.xml` into the mod folder. Both fi
 
 ### Run the game and activate the mod
 
-Launch the game. If everything is set up correctly, your mod should be visible in the mod menu. Enable your mod and restart the game. After restarting, your mod will be active. Open the console via the F8 key, scroll up. If your mod is working, it will display `[Test Mod]: Hello from Test Mod! The modding system works!`.
+Launch the game. If everything is set up correctly, your mod should be visible in the mod menu. Enable your mod and restart the game. After restarting, your mod will be active. Open the debug console with the F8 key (F9 opens the dev menu, a different tool) and scroll up. If your mod is working, it will display `[Test Mod]: Hello from Test Mod! The modding system works!`.
