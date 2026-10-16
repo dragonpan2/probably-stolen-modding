@@ -131,6 +131,10 @@ Probably Stolen/
     <Version>049</Version>
   </GameVersions>
   <Prerequisites />
+  <Assemblies>
+    <Assembly>TestMod.dll</Assembly>
+  </Assemblies>
+  <Capabilities />
 </Manifest>
 ```
 
@@ -148,6 +152,9 @@ Probably Stolen/
   <Mod>some_other_mod_id</Mod>
 </Prerequisites>
 ```
+
+- **Assemblies**：必填。游戏要加载的 DLL，以相对于模组文件夹的路径填写，每个 `<Assembly>` 一条，按加载顺序排列。文件夹中的其他 DLL 一律忽略，并在"模组"菜单中显示警告。与游戏或框架程序集同名的 DLL（`0Harmony`、`Assembly-CSharp`、`UnityEngine.*`、`Steamworks.NET` 等）会被拒绝。
+- **Capabilities**：必填，通常为空（`<Capabilities />`）。声明你的代码在游戏 API 之外做了什么：`files`、`network`、`process`、`dynamic-code`、`native`、`reflection-external`。玩家启用你的模组时，游戏会扫描你的 DLL：用到却未声明的能力会导致启用被拒绝，已声明的能力会在玩家确认前展示给玩家。用控制台命令 `mod-scan <你的模组ID>` 自查。详情：[能力声明与扫描器](ModdingGuide.zh-CN.md#能力声明与扫描器)。
 
 ### 编写模组
 

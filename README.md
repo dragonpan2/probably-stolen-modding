@@ -131,6 +131,10 @@ Create a file named `manifest.xml` and fill in your mod's information:
     <Version>049</Version>
   </GameVersions>
   <Prerequisites />
+  <Assemblies>
+    <Assembly>TestMod.dll</Assembly>
+  </Assemblies>
+  <Capabilities />
 </Manifest>
 ```
 
@@ -148,6 +152,9 @@ Field descriptions:
   <Mod>some_other_mod_id</Mod>
 </Prerequisites>
 ```
+
+- **Assemblies**: Required. The DLLs the game loads, as paths relative to the mod folder, one `<Assembly>` each, in load order. Any other DLL in the folder is ignored and shown as a warning in the Mods menu. A DLL named like a game or framework assembly (`0Harmony`, `Assembly-CSharp`, `UnityEngine.*`, `Steamworks.NET`, ...) is refused.
+- **Capabilities**: Required, and usually empty (`<Capabilities />`). Declares what your code does beyond the game's API: `files`, `network`, `process`, `dynamic-code`, `native`, `reflection-external`. When a player activates your mod the game scans your DLLs: a capability you use but did not declare refuses the activation, and declared capabilities are shown to the player before they approve. Check yours with the console command `mod-scan <your_mod_id>`. Details: [Capabilities and the Scanner](ModdingGuide.md#capabilities-and-the-scanner).
 
 ### Write your mod
 

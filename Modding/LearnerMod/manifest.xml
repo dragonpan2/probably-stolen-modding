@@ -9,4 +9,8 @@
     <Version>047</Version>
   </GameVersions>
   <Prerequisites />
+  <Assemblies>
+    <Assembly>LearnerMod.dll</Assembly>
+  </Assemblies>
+  <Capabilities />
 </Manifest>
