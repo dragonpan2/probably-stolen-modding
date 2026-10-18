@@ -60,6 +60,8 @@ Probably Stolen/
 
 # 为 Probably Stolen 创建你的第一个模组
 
+> **快捷方式：** 本仓库中的 `create-mod.bat` 可以替你完成接下来的四个小节。把它下载到游戏文件夹（与 `Probably Stolen.exe` 同级），双击运行并回答几个问题：模组 ID、项目名、显示名称、作者、版本、描述、游戏版本。它会创建 `Modding\<项目名>\`，其中包含 `.csproj`、已经带有 `<Assemblies>` 和 `<Capabilities />` 的 `manifest.xml`、实现了 `IMod` 的 `ModEntry.cs`、资源文件夹，以及一个在每次编译后把产物安装到 `Mods\<项目名>\` 的构建步骤，随后还会询问是否立即编译。仅限 Windows；其他系统请按下面的小节操作。提示均为英文。
+
 如果还没有的话，先在 Probably Stolen 的根目录（与 Probably Stolen.exe 同级）下创建一个 Modding 文件夹。
 
 ### 创建模组项目
@@ -128,7 +130,7 @@ Probably Stolen/
   <ModVersion>1.0</ModVersion>
   <Description>A test mod for demonstration purposes.</Description>
   <GameVersions>
-    <Version>049</Version>
+    <Version>0.46</Version>
   </GameVersions>
   <Prerequisites />
   <Assemblies>
@@ -139,7 +141,7 @@ Probably Stolen/
 ```
 
 字段说明：
-- **ID**：模组的唯一标识符。请使用小写字母和下划线（例如 `my_cool_mod`）。此项必填；缺失时游戏会跳过你的模组文件夹。
+- **ID**：模组的唯一标识符。请使用小写字母和下划线（例如 `my_cool_mod`）。此项必填；缺失时游戏会跳过你的模组文件夹。只接受 ASCII 字母、数字、`_`、`-` 和 `.`（不能以 `.` 开头，最多 64 个字符）：这个 id 会成为玩家磁盘上的文件名和文件夹名，其他字符会使清单无效。
 - **Name**：在模组菜单中显示的名称。
 - **Author**：你的名字或用户名。
 - **ModVersion**：模组的版本号。
@@ -153,7 +155,7 @@ Probably Stolen/
 </Prerequisites>
 ```
 
-- **Assemblies**：必填。游戏要加载的 DLL，以相对于模组文件夹的路径填写，每个 `<Assembly>` 一条，按加载顺序排列。文件夹中的其他 DLL 一律忽略，并在"模组"菜单中显示警告。与游戏或框架程序集同名的 DLL（`0Harmony`、`Assembly-CSharp`、`UnityEngine.*`、`Steamworks.NET` 等）会被拒绝。
+- **Assemblies**：必填。游戏要加载的 DLL，以相对于模组文件夹的路径填写，每个 `<Assembly>` 一条，按加载顺序排列。文件夹中的其他任何 DLL 都会导致启用被拒绝（已启用的模组也不会加载），直到把它列出或删除，因为运行时会不经扫描直接加载它。与游戏或框架程序集同名的 DLL（`0Harmony`、`Assembly-CSharp`、`UnityEngine.*`、`Steamworks.NET` 等）会被拒绝。
 - **Capabilities**：必填，通常为空（`<Capabilities />`）。声明你的代码在游戏 API 之外做了什么：`files`、`network`、`process`、`dynamic-code`、`native`、`reflection-external`。玩家启用你的模组时，游戏会扫描你的 DLL：用到却未声明的能力会导致启用被拒绝，已声明的能力会在玩家确认前展示给玩家。用控制台命令 `mod-scan <你的模组ID>` 自查。详情：[能力声明与扫描器](ModdingGuide.zh-CN.md#能力声明与扫描器)。
 
 ### 编写模组
@@ -196,7 +198,7 @@ namespace TestMod
 
 - **`Init(ModManifest manifest)`**：游戏启动并加载你的模组时调用一次。用于一次性的初始化：如有需要保存 `manifest` 引用、构造 `ModLog`、缓存引用、准备模组需要的资源。
 - **`OnEnable()`**：紧接在 `Init` 之后调用。
-- **`OnDisable()`**：游戏关闭时调用（将来在模组被关闭时也会调用）。
+- **`OnDisable()`**：游戏关闭时调用。在模组菜单中停用模组要到下次启动才生效，所以实时停用不会调用它；在这里撤销 `OnEnable` 中设置的一切（钩子订阅、调试按钮）。
 
 > ⚠️ **这三个方法都在主菜单阶段运行**，因为模组加载器位于主菜单。在玩家载入存档之前，任何游戏玩法系统都尚未初始化，所以不要在 `Init` 或 `OnEnable` 中读取存档数据、生成物品或访问游戏内管理器；此时它们还不存在。
 
@@ -228,4 +230,6 @@ Probably Stolen/
 
 ### 运行游戏并启用模组
 
-启动游戏。如果一切设置正确，你的模组会出现在模组菜单中。启用模组并重启游戏。重启后模组即处于激活状态。按 F8 打开调试控制台（F9 打开的是开发菜单，那是另一个工具），向上滚动。如果模组正常工作，会显示 `[Test Mod]: Hello from Test Mod! The modding system works!`。
+启动游戏。如果一切设置正确，你的模组会出现在模组菜单的未启用一栏。选中它并按**启用**。游戏此时会读取你的 DLL（不运行它）并对照你的清单检查：`<Capabilities />` 为空且代码中没有异常之处时，模组会直接移到已启用一栏。如果扫描器发现了清单未声明的内容，启用会被拒绝并给出原因；在 F8 控制台运行 `mod-scan test_mod` 查看发现，然后修正清单或代码（[能力声明与扫描器](ModdingGuide.zh-CN.md#能力声明与扫描器)）。之后重启游戏。重启后模组即处于激活状态。按 F8 打开调试控制台（F9 打开的是开发菜单，那是另一个工具），向上滚动。如果模组正常工作，会显示 `[Test Mod]: Hello from Test Mod! The modding system works!`。
+
+你反复重新编译时，游戏会注意到 DLL 变了，可能要求你再次**审核并启用**该模组。在模组详情面板中打开一次**开发者模式**，之后该文件夹的每次重新编译都会被信任。

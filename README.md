@@ -60,6 +60,8 @@ Probably Stolen/
 
 # Creating your first Mod for Probably Stolen
 
+> **Shortcut:** `create-mod.bat` in this repository does the next four sections for you. Download it into the game folder (next to `Probably Stolen.exe`), double-click it, and answer the questions: mod ID, project name, display name, author, version, description, game version. It creates `Modding\<Project>\` with the `.csproj`, a `manifest.xml` that already has `<Assemblies>` and `<Capabilities />`, a `ModEntry.cs` implementing `IMod`, the asset folders, and a post-build step that installs the build into `Mods\<Project>\`. It then offers to build right away. Windows only; on other systems follow the sections below.
+
 If not done already, create a Modding folder in your Probably Stolen root folder (same place where Probably Stolen.exe is).
 
 ### Create the mod project
@@ -128,7 +130,7 @@ Create a file named `manifest.xml` and fill in your mod's information:
   <ModVersion>1.0</ModVersion>
   <Description>A test mod for demonstration purposes.</Description>
   <GameVersions>
-    <Version>049</Version>
+    <Version>0.46</Version>
   </GameVersions>
   <Prerequisites />
   <Assemblies>
@@ -139,7 +141,7 @@ Create a file named `manifest.xml` and fill in your mod's information:
 ```
 
 Field descriptions:
-- **ID**: A unique identifier for your mod. Use lowercase letters and underscores (e.g. `my_cool_mod`). This is required; the game will skip your mod folder if it is missing.
+- **ID**: A unique identifier for your mod. Use lowercase letters and underscores (e.g. `my_cool_mod`). This is required; the game will skip your mod folder if it is missing. Only ASCII letters, digits, `_`, `-` and `.` are accepted (not starting with `.`, at most 64 characters): the id names files and folders on the player's disk, so anything else makes the manifest invalid.
 - **Name**: The display name shown in the mod menu.
 - **Author**: Your name or username.
 - **ModVersion**: The version of your mod.
@@ -153,7 +155,7 @@ Field descriptions:
 </Prerequisites>
 ```
 
-- **Assemblies**: Required. The DLLs the game loads, as paths relative to the mod folder, one `<Assembly>` each, in load order. Any other DLL in the folder is ignored and shown as a warning in the Mods menu. A DLL named like a game or framework assembly (`0Harmony`, `Assembly-CSharp`, `UnityEngine.*`, `Steamworks.NET`, ...) is refused.
+- **Assemblies**: Required. The DLLs the game loads, as paths relative to the mod folder, one `<Assembly>` each, in load order. Any other DLL in the folder refuses the activation (and keeps an active mod from loading) until it is listed or removed, because the runtime would load it unscanned. A DLL named like a game or framework assembly (`0Harmony`, `Assembly-CSharp`, `UnityEngine.*`, `Steamworks.NET`, ...) is refused.
 - **Capabilities**: Required, and usually empty (`<Capabilities />`). Declares what your code does beyond the game's API: `files`, `network`, `process`, `dynamic-code`, `native`, `reflection-external`. When a player activates your mod the game scans your DLLs: a capability you use but did not declare refuses the activation, and declared capabilities are shown to the player before they approve. Check yours with the console command `mod-scan <your_mod_id>`. Details: [Capabilities and the Scanner](ModdingGuide.md#capabilities-and-the-scanner).
 
 ### Write your mod
@@ -196,7 +198,7 @@ Your mod class implements three lifecycle methods that the loader calls at speci
 
 - **`Init(ModManifest manifest)`**: called once when the game starts and your mod is loaded. Use it for one-time setup: store the `manifest` reference if you need it later, construct your `ModLog`, cache references, and prepare any resources your mod will need.
 - **`OnEnable()`**: called right after `Init`
-- **`OnDisable()`**: called when the game is shutting down (and, in the future, when the mod is turned off).
+- **`OnDisable()`**: called when the game is shutting down. Deactivating a mod in the Mods menu only takes effect at the next start, so this is not called for a live deactivation; undo in it whatever `OnEnable` set up (hook subscriptions, debug buttons).
 
 > ⚠️ **All three of these methods run from the main menu**, where the mod loader lives. No gameplay systems are initialized until the player loads a save file, so do not try to read save data, spawn items, or interact with in-game managers from `Init` or `OnEnable`; they will not exist yet. 
 
@@ -228,4 +230,6 @@ Copy the `TestMod.dll` file and your `manifest.xml` into the mod folder. Both fi
 
 ### Run the game and activate the mod
 
-Launch the game. If everything is set up correctly, your mod should be visible in the mod menu. Enable your mod and restart the game. After restarting, your mod will be active. Open the debug console with the F8 key (F9 opens the dev menu, a different tool) and scroll up. If your mod is working, it will display `[Test Mod]: Hello from Test Mod! The modding system works!`.
+Launch the game. If everything is set up correctly, your mod should be visible in the mod menu, in the inactive column. Select it and press **Activate**. The game now reads your DLL (without running it) and checks it against your manifest: with an empty `<Capabilities />` and nothing unusual in the code, the mod simply moves to the active column. If the scanner finds something your manifest does not declare, activation is refused with the reason; run `mod-scan test_mod` in the F8 console to see the finding and fix the manifest or the code ([Capabilities and the Scanner](ModdingGuide.md#capabilities-and-the-scanner)). Then restart the game. After restarting, your mod will be active. Open the debug console with the F8 key (F9 opens the dev menu, a different tool) and scroll up. If your mod is working, it will display `[Test Mod]: Hello from Test Mod! The modding system works!`.
+
+While you keep rebuilding, the game notices that the DLL changed and may ask you to **Review and enable** the mod again. Turn on **Developer mode** in the mod's detail pane once, and every rebuild of that folder is trusted.

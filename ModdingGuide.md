@@ -16,7 +16,7 @@ This guide covers advanced topics for mod development and assumes you have alrea
   - [Save File Responsibility](#save-file-responsibility)
   - [Supported \& Unsupported Modding Features](#supported--unsupported-modding-features)
     - [✅ Natively supported](#-natively-supported)
-    - [❌ Not supported at the moment](#-not-supported-at-the-moment)
+    - [❌ Not supported](#-not-supported)
   - [Mod Assets](#mod-assets)
     - [Item sprites](#item-sprites)
     - [Sounds](#sounds)
@@ -73,6 +73,8 @@ This guide covers advanced topics for mod development and assumes you have alrea
 
 📁 Full example mod projects are included in this repository alongside the guide. They are complete, buildable mods you can open, study, and adapt. Use them as a reference whenever a snippet here doesn't give you enough context to see how the pieces fit together as a whole project.
 
+🛠️ To start a mod of your own, run `create-mod.bat` from this repository in the game folder (next to `Probably Stolen.exe`). It asks for the id, names, author, version, description and target game version, then writes a project with a correct `manifest.xml` (including the required `<Assemblies>` and `<Capabilities />` elements), an `IMod` entry class, the asset folders and a build step that installs the mod into `Mods\` on every build. Windows only; the [README](README.md) has the manual steps.
+
 ---
 
 ## Logging with ModLog
@@ -113,7 +115,7 @@ The bracketed prefix in console output comes from your manifest's `<Name>`. If y
 
 Probably Stolen ships with two in-game tools that are essential while developing and testing mods.
 
-- 🐛 **Debug Console (`F8`)**: opens a console that displays all log output, including messages from `ModLog`, `Debug.Log`, warnings, and errors. Use this to verify your mod loaded, watch hook points fire, and read stack traces when something goes wrong.
+- 🐛 **Debug Console (`F8`)**: opens a console that displays all log output, including messages from `ModLog`, `Debug.Log`, warnings, and errors. Use this to verify your mod loaded, watch hook points fire, and read stack traces when something goes wrong. Your mod's own `Debug.Log` and `ModLog` lines always show, and so do the mod loader's lines; the game's own info lines are hidden unless you turn on **F9 > Command > Toggle Verbose Log** (warnings and errors always show).
 - 🛠️ **Dev Menu (`F9`)**: opens a menu containing many functions useful for mod development and testing, such as spawning items, triggering events, and inspecting game state. Handy for reproducing edge cases without having to play through to them. The buttons sit in five columns: Store, Command, Spawn, Special, and Modding (the paper editor, book reload, asset viewers; see [Paper Books](#paper-books)).
 
 ### Adding your own debug buttons
@@ -163,26 +165,29 @@ Player saves are permanent and belong to the player. As a mod author, you are re
 
 ## Supported & Unsupported Modding Features
 
-Not every kind of mod is feasible right now. Before you start a project, check that what you have in mind is on the supported list; otherwise you may hit walls the modding API doesn't currently let you work around.
+"Supported" below means the game has an API meant for it, documented in this guide, that we keep working across updates. Everything else is still reachable through Harmony, but on your own: a game update can break it without notice, and nothing in this guide will help you with it.
 
 ### ✅ Natively supported
 
-- **Modded items with custom sprites**: add new items to the game, including their artwork
-- **Modded customers with custom sprites**: add new customers with their own appearance
-- **Modded events**: add new in-game events
+- **Modded items with custom sprites**: add new items to the game, including their artwork ([Hook Points](#adding-items-through-the-item-directory-hook), [Mod Assets](#mod-assets))
+- **Customer generation**: alter a customer as it is generated through the `OnGenerateCustomer*` hooks, which hand you the `StoreClientManager` ([Hook Points](#available-hooks))
 - **Loot table edits**: put your items into the game's drop tables, change or remove existing drops, or add whole new tables, from code or from a JSON file ([Loot Tables](#loot-tables))
 - **Custom UI**: build your own windows and panels (settings, inspectors, counters) from code, using the game's widgets ([Custom UI](#custom-ui))
 - **Paper books**: guides, cards and sheets in the game's paper look, laid out with the in-game editor and saved as JSON, with an item that opens them ([Paper Books](#paper-books))
+- **Machine windows**, **game options**, **Wild's Network upgrades**, **starting scenarios and perks**, **difficulties**, **afterhour locations and events**: each has its own section below
+- **Mod configuration and mod data**: typed settings with a generated panel, a per-run key/value store, and files in your own folders ([Mod Configuration](#mod-configuration), [Saving Mod Data](#saving-mod-data))
 
-### ❌ Not supported at the moment
+### ❌ Not supported
 
-- **Major changes to existing UI**: restructuring or replacing built-in UI
-- **Changes to the store**: modifying the store's behavior or contents
+- **New customer sprites and new client factions**: there is no API to register them; the generation hooks only change what the game generated
+- **Changing existing UI**: restructuring or replacing built-in screens; add your own windows instead
+- **Changing the store's layout or core loop**: counters, the day cycle, negotiation
 - **Overhaul-style mods**: sweeping reworks that touch many systems at once
+
 - **Modded deals for the Underground Exchange**: adding new deals to the Underground Exchange
 - **Special Item**: Inspectable Items and Appraisal Items
 
-Not supported features may be supported in the future.
+Unsupported features may become supported in a later update. Anything in this list can still be attempted with Harmony patches. Expect to maintain it yourself after each game update, and keep the [capability rules](#capabilities-and-the-scanner) in mind: patches on game code are free, but reflection into engine or system types is a declared capability.
 
 ---
 
@@ -426,6 +431,18 @@ void RegisterItems(ModItemDirectory dir)
 
 Once registered, spawn it anywhere with `ModHelper.SpawnItem("health_pack")`.
 
+**Placing a spawned item.** `SpawnItem` returns a `GameItem` that exists nowhere yet; hand it to one of these, which put it into the store's containers the same way the game does (space permitting):
+
+| Helper | Where the item goes |
+|---|---|
+| `ModHelper.MoveItemToInventory(item)` | the player's inventory |
+| `ModHelper.MoveItemToFrontCounter(item)` / `MoveItemToBackCounter(item)` | the front or back counter |
+| `ModHelper.MoveItemToDisplayCase(item)` | the display case |
+| `ModHelper.MoveItemToTrash(item)` | the trash |
+| `ModHelper.MoveItemToAfterhours(item)` | the afterhour bag (what the player brings back from a night out) |
+
+`ModHelper.SetItemOwnerShip(item, isOwn)` marks the item as the player's (true) or a customer's (false) and returns it, so it chains: `ModHelper.MoveItemToFrontCounter(ModHelper.SetItemOwnerShip(ModHelper.SpawnItem("health_pack"), false))`. `ModHelper.SetSource(item, modId, modName)` stamps your mod id and name on the item as tags (`ModHelper.MOD_ID_TAG` / `MOD_NAME_TAG`), so your code, or another mod's, can tell where an item came from through `item.GetTagReadonly(ModHelper.MOD_ID_TAG).GetString()`. Nothing in the game reads them; the items made from your paper books carry them, anything else only if you call it. These helpers need a loaded run: the store's containers do not exist in the main menu, so calling them from `Init` or `OnEnable` throws a `NullReferenceException`. Call them from a hook such as `OnGameLoadedInit` or from your own UI.
+
 ### Available hooks
 
 Replace `*` with a tier name, e.g. `ModHook.OnGenerateCustomerVeryEarly`, `ModHook.OnShutterClosedLate`.
@@ -601,11 +618,13 @@ Mods often need to remember something that is not tied to an item: a quest step,
 ```csharp
 // Write. Keys are namespaced by your mod id, so use whatever names you like.
 ModHelper.SetModDataInt("my_mod_id", "deliveries", 3);
+ModHelper.SetModDataFloat("my_mod_id", "reputation", 0.75f);
 ModHelper.SetModDataBool("my_mod_id", "met_courier", true);
 ModHelper.SetModData("my_mod_id", "route", JsonUtility.ToJson(routeState));
 
 // Read, with a fallback for when the key was never written.
 int deliveries = ModHelper.GetModDataInt("my_mod_id", "deliveries", 0);
+float reputation = ModHelper.GetModDataFloat("my_mod_id", "reputation", 0f);
 bool met = ModHelper.GetModDataBool("my_mod_id", "met_courier");
 RouteState route = JsonUtility.FromJson<RouteState>(ModHelper.GetModData("my_mod_id", "route", "{}"));
 
@@ -624,6 +643,8 @@ Rules:
 - **Disabled mods keep their data.** Nothing is pruned when a mod is turned off, so re-enabling restores its state. If your mod wants a clean slate, call `ClearModData` yourself.
 - **Keep it small.** The store is written with every save. Kilobytes are fine; do not stash large blobs or per-frame data in it.
 - **It is not for items.** Anything that belongs to a specific item goes on that item's tags (`item.ModifyTag` / `GetTagReadonly`), which are saved with the item and travel with it.
+
+**Files.** For data that is not per run (a cache, an export, something the player edits by hand) `ModHelper` has file helpers that need no `files` capability: `ReadModFileText` / `ReadModFileBytes` / `ModFileExists` read from your mod folder (`GetModFolder` tells you where it is), and `GetModDataFolder`, `ModDataFileExists`, `ReadModDataFileText` / `Bytes`, `WriteModDataFileText` / `Bytes`, `DeleteModDataFile` and `ListModDataFiles` read and write a folder of your own in the save location. Relative paths only. The sample and the rules are in [Reading and writing files without the capability](#reading-and-writing-files-without-the-capability).
 
 ---
 
@@ -727,11 +748,11 @@ Coordinates are *design units*: the pixels of the background image, origin at th
 
 Book fields: `id` (defaults to the file name), `title` (editor only), `background` (a vanilla sprite name such as `notebook_manual`, `guide_reworked`, `tutorial_sheet`, `business_card_template`, `exchange`, `test_strips`; a file name from your `Textures/Paper/`; or `"modId:name"`), `width`/`height` (displayed size; 0 keeps the vanilla size for a vanilla background), `designWidth`/`designHeight` (override the coordinate space; 0 means the background's pixels), `border` (`[left, bottom, right, top]` 9-slice for a stretched background), `posX`/`posY` (where the panel opens, offset from the screen center; the vanilla guides use -450, 0), `sounds`, `draggable`, `zoomable` (default true), `chrome` (elements drawn on every page), `templates`, `pages`, `item`.
 
-Element fields: `type` (`text`, `image`, `button`, `flow`), `id`, `x`, `y`, `w`, `h`, `visible`, `locked` (editor only), `raycast` (texts and images let clicks through unless true). Text: `text` or `loc` (a key of your `Localization/*.csv`, wins over `text`), `style`, `fontSize` (0 keeps the style's), `align` (`left`, `center`, `right`), `valign` (`top`, `middle`, `bottom`), `color` (`#rrggbb`), `wrap`, `autoHeight` (grows with the text), `preview` (editor-only sample for texts you fill from code). Image: `sprite`, `fit` (`stretch`, `fit`, `native`). Button: `action` (the name you bind in code; `close`, `zoom`, `flip_left`, `flip_right` are handled by the book), `text` for a text button (blue plate), `sprite` and optional `hoverSprite` for an icon button. Flow: `spacing`, `align`; children set `flow` to the flow's id and are stacked vertically (texts take their height from their content). Template elements may carry a `slot` name; a page's `slots` map fills them (text for texts, sprite key for images).
+Element fields: `type` (`text`, `image`, `button`, `flow`, `line`), `id`, `x`, `y`, `w`, `h`, `visible`, `locked` (editor only), `raycast` (texts and images let clicks through unless true). Text: `text` or `loc` (a key of your `Localization/*.csv`, wins over `text`), `translations` (text per locale code, `{"zh": "..."}`, used when that language is selected; handy for a few strings without csv files), `style`, `fontSize` (0 keeps the style's), `align` (`left`, `center`, `right`), `valign` (`top`, `middle`, `bottom`), `color` (`#rrggbb`), `wrap`, `autoHeight` (grows with the text), `preview` (editor-only sample for texts you fill from code). Image: `sprite`, `fit` (`stretch`, `fit`, `native`), `scale` (native fit: the pixel size times this; whole numbers keep pixel art crisp), `color` (a tint), `silhouette` (every opaque pixel painted in `color`, a flat shadow), `fill` (a `#rrggbb` for the clear pixels the sprite's outline encloses; the scenario icons are dark rings drawn for a teal disc, so they need one on a dark background). Line: from `x`, `y` to `x2`, `y2`, `thickness`, `arrow` (`none`, `end`, `start`, `both`), `arrowSize`, `color` (empty draws ink). Button: `action` (the name you bind in code; `close`, `zoom`, `flip_left`, `flip_right` are handled by the book), `text` for a text button (blue plate), `sprite` and optional `hoverSprite` for an icon button. Flow: `spacing`, `align`; children set `flow` to the flow's id and are stacked vertically (texts take their height from their content). Template elements may carry a `slot` name; a page's `slots` map fills them (text for texts, sprite key for images).
 
 Item fields: `id` (the item identifier, spawn it with `ModHelper.SpawnItem`), `name`/`nameLoc`, `description`/`descriptionLoc`, `sprite` (`atlas/sprite` from the vanilla item atlases, default `items_misc/manual1`, or a file name from `Textures/Items/`), `value`, `important` (cannot be stolen, default true). The item is a document: reading it opens the book.
 
-Text styles: `header` (the "Station Trade Commission" stamp, Tektur), `title` (Noto Sans Medium), `section` and `body` (Noto Serif), `caption` and `label` (Noto Sans Bold), `serif_title` (Noto Serif Bold), `handwritten` and `page_number` (Caveat), `stamp` (the red LCD look), `button` (text button labels). Styles are font roles, so they switch fonts per language like the rest of the game.
+Text styles: `header` (the "Station Trade Commission" stamp, Tektur), `title` (Noto Sans Medium), `section` and `body` (Noto Serif), `caption` and `label` (Noto Sans Bold), `serif_title` (Noto Serif Bold), `handwritten` and `page_number` (Caveat), `stamp` (the red LCD look), `button` (text button labels), and the dark options look of the Meta panel: `meta_header` (bold), `meta_body`, `meta_warning`. Styles are font roles, so they switch fonts per language like the rest of the game.
 
 ### Binding code to a book
 
@@ -748,7 +769,7 @@ public void OnEnable()
 }
 ```
 
-- `ModHelper.OpenPaper(modId, bookId)` opens a book (or brings it to the front) and returns the `PaperUI`; `ClosePaper`, `IsPaperOpen`, `GetOpenPaper` do what they say. `ModHelper.SpawnPaperItem(modId, bookId)` spawns the declared item; `ModHelper.GetPaperBookIds(modId)` lists your books.
+- `ModHelper.OpenPaper(modId, bookId)` opens a book (or brings it to the front) and returns the `PaperUI`; `ClosePaper`, `IsPaperOpen`, `GetOpenPaper` do what they say. `ModHelper.SpawnPaperItem(modId, bookId)` spawns the declared item; `ModHelper.GetPaperBookIds(modId)` lists your books; `ModHelper.RemovePaperBooks(modId)` unregisters every book of your mod (open panels close) and returns how many.
 - On the `PaperUI`: `OnAction(name, callback)` binds a button, `Get(id)` returns the element handle with the usual setters (`SetText`, `SetSprite`, `SetVisible`, `OnClick`...), `SetText(id, text)` and `SetSprite(id, key)` are shortcuts, `FlipTo(page)`, `CurrentPage`, `PageCount`, `Hide()`, `Close()`, and the events `PageShown`, `Closed`, `ActionFired`.
 - `ModHook.OnPaperOpened(string fullId, PaperUI ui)` is the global form of the same signal ("modId:bookId").
 - Books register with the mod's assets, after `OnEnable`, so `OnPaperOpened` is safe to call from `OnEnable` before the file is loaded.
@@ -774,7 +795,7 @@ PaperUI ui = ModHelper.CreatePaper("my_mod_id", "recipes", "notebook_manual")
 
 ### Vanilla art and your own
 
-The sprite picker and `background` / `sprite` keys accept every sprite the vanilla paper panels use, by sprite name: backgrounds (`notebook_manual`, `guide_reworked`, `guide`, `tutorial_sheet`, `business_card_template`, `exchange`, `test_strips`, `mentors_notes`...), the chrome buttons (`paper_buttons_close1`, `paper_buttons_screen_0`, `paper_buttons_l_1`, `paper_buttons1`, `blue_button_2x`), the guide header (`guide_logo`) and the illustrations of the vanilla guides. **F9 > Modding > Paper Sprite Picker** browses them and copies a key. Your own art goes in `Textures/Paper/` of your mod (PNG or JPG, loaded as smooth UI sprites) and is named by file name, or `"my_mod_id:name"` from another mod's book. Item sprites from `Textures/Items/` work too.
+The sprite picker and `background` / `sprite` keys accept every sprite the vanilla paper panels use, by sprite name: backgrounds (`notebook_manual`, `guide_reworked`, `guide`, `tutorial_sheet`, `business_card_template`, `exchange`, `test_strips`, `mentors_notes`...), the chrome buttons (`paper_buttons_close1`, `paper_buttons_screen_0`, `paper_buttons_l_1`, `paper_buttons1`, `blue_button_2x`), the guide header (`guide_logo`) and the illustrations of the vanilla guides. **F9 > Modding > Paper Sprite Picker** browses them and copies a key. Your own art goes in `Textures/Paper/` of your mod (PNG or JPG, loaded as smooth UI sprites) and is named by file name, or `"my_mod_id:name"` from another mod's book. Item sprites from `Textures/Items/` work too. Two more families: the vanilla item sprites as `atlas/name` (`items_aquaculture/tilapia_large1`, `items_misc/manual1`; the palette's *Item sprite from the game atlases* button lists them) and the dark options chrome as `meta_` plus the sprite name (`meta_panel`, a sliced plate that also works as a background, `meta_seperator`, `meta_checkbox`...), plus the starting scenario icons by name (`icons_apprentice`, `icons_aquaculture`...).
 
 Console commands (F8): `paper-list`, `paper-open <id>`, `paper-close [id]`, `paper-reload`, `paper-edit [id]`, `paper-item <id>`. The F9 Modding column has **Reload Mod Books** for files added or edited while the game runs.
 
@@ -850,7 +871,7 @@ Rules:
 
 - **You own the value.** The game only reads it through the getter and writes it through the setter, so store it where it belongs: `PlayerPrefs` or ES3 for a global preference, [mod data](#saving-mod-data) for something tied to the run. The getter runs every time the window opens; the setter runs on Apply only, never while the player is still dragging a slider.
 - **Labels, tooltips and dropdown options are functions**, resolved every time the window opens, so `() => ModHelper.GetLocalized(...)` follows a language change. A tooltip adds the info icon next to the label.
-- **Ids are namespaced.** `optionId` and your own section ids are prefixed with your mod id internally, so they cannot collide with another mod. Registering an id again replaces the earlier entry. `RemoveGameOption(modId, optionId)` and `RemoveGameOptions(modId)` take entries out again.
+- **Ids are namespaced.** `optionId` and your own section ids are prefixed with your mod id internally, so they cannot collide with another mod. Registering an id again replaces the earlier entry. `RemoveGameOption(modId, optionId)` and `RemoveGameOptions(modId)` take entries out again. `ModHelper.GameOptionId(modId, optionId)` returns the prefixed id (`"modId:optionId"`) the game uses internally, for the rare case where you need to match an entry by its full id.
 - **Order** is registration order inside a section; your sections appear after the built-in ones.
 - **Key binds** refuse Escape, the digit keys and any key another bind row in the window already uses, and only keyboard keys can be captured. While the player is choosing a key, the game's own hotkeys stay quiet; yours should too: skip your poll while `KeyBindHelper.SuppressHotkeys` is true.
 - Callable from `OnEnable`; the window is built fresh on every open.
@@ -1109,7 +1130,7 @@ Rules:
 - **The panel** is built from your `buildPanel(CustomUIBuilder)` (labels, buttons, toggles, sliders, images: see Custom UI) and gets the Return button after your controls. `ReturnFromAfterhour()` returns from your own control instead. A mod that builds its own panel GameObject sets `panelObject` and the game activates it instead of building one (then it needs its own Return control).
 - **Pictures and the scene.** `imageKey` and `backgroundKey` go through the same lookup as `AddImage` (`"modId:spriteName"`). The card crops the picture to 296x168 keeping its aspect; the scene sprite is drawn at the origin with sorting order `backgroundSortingOrder` (20 by default; the vanilla art is 960x540). A mod that builds its own scene GameObject sets `stageObject` instead and the game activates it while the player is there. Without a picture the card shows a placeholder plate.
 - **`isAvailable`** false shows the card greyed with "Unavailable" and refuses travel; `isDiscovered` false hides it. Both are asked every time the screen opens.
-- **Where am I.** `ModHelper.IsOutsideStore()` and `GetCurrentAfterhourLocationId()`; the hooks `ModHook.OnAfterhourArriveEarly / Late` and `OnAfterhourLeaveEarly / Late` fire with the location id for every location, vanilla ones included (`AfterhourLocation.DUMPING_GROUND`, `COMMISSARY`, `DR_JACKSON`).
+- **Where am I.** `ModHelper.IsOutsideStore()` and `GetCurrentAfterhourLocationId()`; `GetAfterhourLocation(id)` returns any location's definition (vanilla or mod), null for an unknown id; the hooks `ModHook.OnAfterhourArriveEarly / Late` and `OnAfterhourLeaveEarly / Late` fire with the location id for every location, vanilla ones included (`AfterhourLocation.DUMPING_GROUND`, `COMMISSARY`, `DR_JACKSON`).
 - **State.** `GetAfterhourVisits(id)`, `GetAfterhourCounter(id, key)` / `SetAfterhourCounter(id, key, value)` are saved with the run under the location id.
 - **Events.** Several events can run on one location at once. `AddAfterhourEvent` with a `dailyChancePercent` starts on its own at day start while it is not already running (cap a location with `maxConcurrentEvents`), or with `weekdays` (`AfterhourWeekday.Wednesday`...) on those days of the station week (day 1 is Monday; a day a scheduled event starts on has no random events); `closesLocation: true` makes the location unavailable while the event runs (greyed card, no travel, the event still listed); `StartAfterhourEvent(eventId, days)` adds one from code (a running one is extended), `EndAfterhourEvent(eventId)` ends one, `EndAllAfterhourEvents(locationId)` all; `IsAfterhourEventActive(eventId)`, `GetActiveAfterhourEventIds(locationId)` and `GetAfterhourModifier(locationId, key)` (the sum over the running events) read them; your own mechanics read your own modifier names. The vanilla modifiers are relative percentages on a chance the game already has (write the effect line as "X% more/less likely"): the dumping ground reads `injury_chance` (scales both wound chances), `junk_chance` (scales the junk table's weight in the loot roll, negative for less junk) and `loot_double_chance` (percentage points added to the scanner's double-loot chance); two are not chances: `injury_immunity` (above 0: no wounds at all) and `scav_attempts` (flat extra attempts per night). Dr. Jackson's reads `inventor_sell_price` (relative change of his shop prices) and the commissary `commissary_restock_percent_of_max` (a share of each item's max stock added at day start). The vanilla events (`fresh_dump`, `georgio_assistance`, `special_stock`, `jackson_discount`, `commissary_burglary`, `fresh_restock`) use them. On the card the title is green when every effect is good, red when every one is bad and orange when mixed (pass `tone` to force one); the days left show after the description. `ModHook.OnAfterhourEventStarted / Ended` fire with the location id and the event id. The F9 console's `afterhour-events`, `afterhour-event-start` and `afterhour-event-end` test them.
 
@@ -1175,11 +1196,13 @@ Rules:
 
 ## Capabilities and the Scanner
 
-A mod DLL runs with the same rights as the game, so the game cannot make a mod safe. What it does instead is make the player's **Activate** click an informed decision and remember exactly what was approved. When a player activates your mod, the game reads your DLLs (without loading them) and checks three things before it writes the approval:
+A mod DLL runs with the same rights as the game, so the game cannot make a mod safe. What it does instead is make the player's **Activate** click an informed decision and remember exactly what was approved. When a player activates your mod, the game reads your DLLs (without loading them) and checks, in this order, before it writes the approval:
 
-1. the developers' remote block list (a mod found to be malicious is refused on every player's machine within hours, no game update needed);
-2. that none of your DLLs carries the name of a game or framework assembly (`0Harmony`, `Assembly-CSharp`, `UnityEngine.*`, `Steamworks.NET`, `mscorlib`, ...);
-3. that everything your code reaches is covered by the `<Capabilities>` element of your manifest.
+1. that every DLL in your folder is listed in `<Assemblies>` (an unlisted one would be loaded by the runtime without a scan);
+2. the developers' remote block list and emergency pause (a mod found to be malicious is refused on every player's machine within hours, no game update needed);
+3. that every listed DLL exists and none carries the name of a game or framework assembly (`0Harmony`, `Assembly-CSharp`, `UnityEngine.*`, `Steamworks.NET`, `mscorlib`, ...);
+4. that the code contains none of the [hard refusals](#hard-refusals) below;
+5. that everything your code reaches is covered by the `<Capabilities>` element of your manifest.
 
 The approval records the hashes of your manifest and listed DLLs. From then on the mod loads at every start as long as the files still match, or changed without gaining a capability.
 
@@ -1189,12 +1212,12 @@ The approval records the hashes of your manifest and listed DLLs. From then on t
 
 | Capability | What triggers it | Capability-free alternative |
 |---|---|---|
-| `files` | `System.IO.File`, `FileStream`, `Directory`, `FileInfo`, `DirectoryInfo`, `StreamReader` / `StreamWriter` opened on a path, ES3 overloads that take a path, `UnityEngine.Windows.File` | `ModHelper.GetConfig` for settings, `SetModData` for run data, `ReadModFile*` and `*ModDataFile*` for files (see below) |
-| `network` | `System.Net.*` (`HttpClient`, `WebClient`, sockets), `UnityWebRequest`, `WWW`, Steam HTTP and networking APIs | none, declare it |
+| `files` | `System.IO.File`, `FileStream`, `Directory`, `FileInfo`, `DirectoryInfo`, `StreamReader` / `StreamWriter` opened on a path, `XDocument` / `XmlDocument` / `XmlReader` / `XmlWriter` given a path, `ZipFile`, memory-mapped files, the Windows `Registry`, `ScreenCapture`, `AssetBundle`, `UnityEngine.Windows.File`; Easy Save: `ES3File`, `ES3Writer`, `ES3Reader`, `ES3Directory`, `ES3` methods that take a path or two strings (key and file), `new ES3Settings(path)` and `settings.path =` (keyed `ES3.Save(key, value)` is free) | `ModHelper.GetConfig` for settings, `SetModData` for run data, `ReadModFile*` and `*ModDataFile*` for files (see below) |
+| `network` | `System.Net.*` (`HttpClient`, `WebClient`, sockets; not `WebUtility` or `IPAddress`), `UnityWebRequest`, `WWW`, `Ping`, Steam HTTP and networking APIs | none, declare it |
 | `process` | `System.Diagnostics.Process`, `ProcessStartInfo`, `Application.OpenURL` (it runs ShellExecute, which can start a program) | none, declare it |
-| `dynamic-code` | `Assembly.Load*`, `AppDomain.Load`, `Reflection.Emit`, `Activator.CreateInstanceFrom`, embedded resources that look encrypted | none, declare it |
+| `dynamic-code` | `Assembly.Load*`, `AppDomain.Load`, `Reflection.Emit`, `Activator.CreateInstanceFrom`, `Activator.CreateInstance(assemblyName, ...)`, compiling expression trees (`Expression.Compile()`), `BinaryFormatter` and the other `Formatters` deserialisers, `CSharpCodeProvider` | none, declare it |
 | `native` | `DllImport`, `unsafe` code and pointers, `calli`, `Marshal`, `UnsafeUtility` | none, declare it |
-| `reflection-external` | `Type.GetType`, `GetMethod` / `GetField` / `GetProperty` / `InvokeMember`, `Assembly.GetType`, `AccessTools` or `Traverse` with a **computed** name, or with a literal name under `System.`, `UnityEngine.`, `HarmonyLib.`, `Steamworks.`, `ES3` | reflect on game types with `typeof(GameItem)` or a literal game type name: that is free |
+| `reflection-external` | `Type.GetType`, `GetMethod` / `GetField` / `GetProperty` / `InvokeMember`, `Assembly.GetType` / `GetTypes`, `AccessTools` or `Traverse` with a **computed** name or type, or with a literal name under `System.`, `UnityEngine.`, `HarmonyLib.`, `Steamworks.`, `ES3`; the C# `dynamic` keyword (it compiles to the runtime binder) | reflect on game types with `typeof(GameItem)` or a literal game type name: that is free |
 
 Only the game's own types (`Assembly-CSharp`) and your own are free for reflection. The scanner follows the IL back to the instruction that produced the type or the name; when it cannot tell (the value came through a variable, a branch, a method call), it counts as computed, so prefer `AccessTools.Method(typeof(PlayerStore), "ModCash")` over `AccessTools.Method("PlayerStore:ModCash")` built from strings, and `typeof(X)` over `someObject.GetType()`.
 
@@ -1206,9 +1229,9 @@ Some patterns refuse the activation whatever the manifest says, because no legit
 
 - an embedded resource that is an executable, or any resource that looks encrypted (high entropy and not a known image, sound, text or `.resources` format);
 - string constants pointing at browser profiles, Steam login files, Discord data or crypto wallets;
-- a string constant of a thousand or more base64 characters (a hidden payload);
-- `Harmony.UnpatchAll()` without your Harmony id (it removes every mod's patches);
-- Harmony patches or reflection aimed at the game's mod loader or trust code (`ModLoader`, `ModTrust`, `ModScanner`, `ModTrustList`);
+- a string constant of 1024 or more base64 characters (a hidden payload);
+- `Harmony.UnpatchAll()` with a literal `null` id (it removes every mod's patches, the game's own fixes included);
+- Harmony patches or reflection aimed at the game's mod loader or trust code: `ModLoader`, `ModTrust`, `ModTrustRecord`, `ModFingerprint`, `ModTrustList`, `ModScanner`, `ModCapability`, `ModSecurityDebug`;
 - shipping your own `0Harmony`, MonoMod or Cecil, or any DLL named like a game assembly (including libraries the game already ships, such as `Newtonsoft.Json`). Reference the game's copies instead;
 - a DLL in your folder that `<Assemblies>` does not list, or a listed DLL that references an assembly which is neither the game's nor listed. The runtime would load such a file from your folder without the scan, so the whole mod is refused until the manifest lists it.
 
@@ -1216,20 +1239,24 @@ Third-party libraries you bundle are scanned like your own code and must be list
 
 ### Checking before you publish
 
-Open the console (F8) and run `mod-scan <your_mod_id>` (any listed mod, active or not) or `mod-scan <path to a folder>`. It prints the listed assemblies, DLLs in the folder that are not listed, the capabilities your manifest declares, the capabilities the scanner detected, each finding as `capability: Type.Method -> what it referenced`, any hard flag, and the version hash. Fix the manifest until `declared` covers `detected` and there are no hard flags. If a finding surprises you, the method name tells you where to look; most `reflection-external` findings go away by switching to `typeof(...)`.
+Open the console (F8) and run `mod-scan <your_mod_id>` (any listed mod, active or not) or `mod-scan <path to a folder>`. It prints the listed assemblies, DLLs in the folder that are not listed, how many methods were scanned, the capabilities your manifest declares (`declared`), the capabilities the scanner detected (`detected`), each finding as `capability: Type.Method -> what it referenced`, any hard flag, an `ERROR:` line when a DLL could not be read, and a `fingerprint:` line, the hash of this exact version that approvals and the developers' lists refer to. Fix the manifest until `declared` covers `detected` and there are no hard flags. If a finding surprises you, the method name tells you where to look; most `reflection-external` findings go away by switching to `typeof(...)`.
+
+Two more commands help while testing as a player would: `mod-trust` lists the approvals recorded on this computer (hashes, capabilities, developer mode, and for Workshop mods the item and publisher ids) and the trust state of every mod this session; `mod-trust-list` shows the state of the developers' remote list. The F8 console is Quantum Console: `user-commands` lists the game's own commands (`loot-list`, `mod-scan`, ...) and `all-commands` everything, including the engine-level ones.
+
+**Before a release**, run through this once: `mod-scan` clean, `<Capabilities>` not larger than it needs to be, every DLL listed in `<Assemblies>`, no bundled library the game already ships, `<ModVersion>` bumped. A player's approval records the hashes of your files: an update that adds no capability keeps loading, an update that adds one waits for every player to review it, so decide your capabilities before the first release rather than after.
 
 ### What players see
 
-- **Activating** a mod with an empty `<Capabilities>` just works. A mod with declared capabilities shows the player a confirmation listing them in plain words ("Access the internet", "Start other programs or open links", ...) and warning that such a mod can do anything they can. A refused mod shows why.
+- **Activating** a mod with an empty `<Capabilities>` just works. A mod with declared capabilities shows the player a confirmation listing them in plain words ("Access the internet", "Start other programs or open links", ...) and warning that such a mod can do anything they can; a version the developers have put on their verified list skips that prompt. A refused mod shows why.
 - The detail pane shows your capabilities and the approval state: approved on this date, updated without new capabilities, verified by the developers, or why it was not loaded.
 - **Updating**: identical files load. Changed files that gain no capability load, and the pane notes the update. Changed files that gain a capability, or a new version that fails the scan, do not load; the row shows a warning and the pane offers **Review and enable**, which runs the activation checks again. Plan your capabilities before the first release: adding one later interrupts every player.
 - **Deactivating** withdraws the approval; the next activation goes through the checks again.
-- A mod on the remote **block list** cannot be activated and is turned off on the machines where it was running, with the reason shown. In an emergency the developers can pause all mod loading until a fix ships; the Mods menu says so.
+- A mod on the remote **block list** cannot be activated, and on the machines where it is active it is switched off for the next start, with the reason shown (a copy already running keeps running until that restart). In an emergency the developers can pause all mod loading until a fix ships; the Mods menu says so and the pane reads "Not loaded: mod loading is paused by the developers".
 - The first time the Mods menu opens, the game still tells the player that mods can contain code.
 
 ### Developer mode
 
-While you work on a local mod (in `Mods/`), every rebuild changes the hashes. Once the mod has been activated once, the detail pane shows a **Developer mode** button for local mods: turn it on and every change of that folder is trusted at start, scan or no scan (the console still logs what the scan found). It is per mod, per computer, and off by default. Workshop copies never have it.
+While you work on a local mod (in `Mods/`), every rebuild changes the hashes. Once the mod has been activated once, the detail pane shows a **Developer mode** button for local mods: turn it on and every rebuild of that folder loads at start without a new approval, even when the new build uses capabilities you have not declared yet (the console only warns when the scan refused it outright). Two things it does not cover: a DLL in the folder that `<Assemblies>` does not list still stops the mod, and the next **Activate** or **Review and enable** still applies the full rules, so run `mod-scan` before you publish. It is per mod, per computer, and off by default. Workshop copies never have it, and a local folder taking over the id of a subscribed item has to be approved once as a local mod before the button appears.
 
 ### Reading and writing files without the capability
 
@@ -1263,7 +1290,7 @@ What players see:
 - The Mods menu shows the item's Workshop preview image (the `previewfile` you upload, see below). A `preview.png` in the item's folder is only used when Steam has no preview or is offline. Mods without any image show no banner at all.
 - **Unsubscribe Selected** in the Mods menu removes a Workshop mod: its row disappears and it is deactivated right away, and Steam deletes its files. If it was running, it keeps running until the game restarts. The Steam button next to Activate opens the item's Workshop page (in the Steam overlay, or in the browser when the overlay is turned off).
 - Items that were subscribed but not yet downloaded when the game started download in the background; the Mods menu shows how many are still downloading, and they appear after the next restart.
-- If a local folder in `Mods/` has the same `<ID>` as a subscribed item, the local copy is used and the Workshop copy is ignored. That is how you test a new version of your own mod without unsubscribing. The Mods menu notes it on the local mod, and that mod's Steam button and Unsubscribe act on the Workshop item (unsubscribing keeps the local copy).
+- If a local folder in `Mods/` has the same `<ID>` as a subscribed item, the local copy is used and the Workshop copy is ignored. That is how you test a new version of your own mod without unsubscribing. The first start with the local copy shows it as "Not loaded: changed since you approved it (it now comes from a different place than the approved copy)": use **Review and enable** once, after which the **Developer mode** button appears for it. The Mods menu notes it on the local mod, and that mod's Steam button and Unsubscribe act on the Workshop item (unsubscribing keeps the local copy).
 - The first time the Mods menu opens, the game tells the player that mods can contain code. Keep that in mind: a mod that behaves badly hurts every modder's reputation.
 
 Workshop is available on the main game only, not on the demo.
@@ -1312,6 +1339,8 @@ Harmony is a runtime patching library that lets you inject code before, after, o
 ### Patches are applied automatically
 
 You do not need to call `Harmony.PatchAll()` yourself. The game scans each loaded mod assembly and applies every `[HarmonyPatch]` class it finds. Just declare your patch classes (see below) and they will be active as soon as the mod is enabled.
+
+> ⚠️ **What the mod scanner thinks of patches.** Patching game code needs no declared capability. Three things are refused outright when the player activates the mod: patches aimed at the loader or trust code (`ModLoader`, `ModTrust*`, `ModFingerprint`, `ModScanner`, `ModCapability`, `ModSecurityDebug`), `Harmony.UnpatchAll()` called with a literal `null` id (it would remove every mod's patches), and shipping your own `0Harmony.dll`. Use the game's copy. The loader owns the `Harmony` instance that applied your patches (`ModLoader.Mods.Find(m => m.Manifest.ID == "my_mod_id").HarmonyInstance`, id `"mod.my_mod_id"`); if you create your own instance for patches applied by hand, unpatch with its own id, never with none. Reaching into Unity, .NET or Harmony internals through `AccessTools` or reflection, or building type and member names from strings at runtime, counts as the `reflection-external` capability; `typeof(GameType)` and literal game type names are free. Details: [Capabilities and the Scanner](#capabilities-and-the-scanner).
 
 ### Postfix: run code after the original
 
@@ -1398,10 +1427,14 @@ Open the **F8 console** first: every mod logs its load result, asset counts, and
 
 | Symptom | Likely cause |
 |---|---|
-| Mod doesn't appear in the mod menu | No `manifest.xml` in the mod's root folder, or its `<ID>` is empty (look for a `[ModLoader]` warning), or the folder has no DLL with a class implementing `IMod` (look for `[Your Mod Name] Error: ...`). The loader skips the folder in every case. |
+| Mod doesn't appear in the mod menu | The manifest is missing or malformed and the loader skipped the folder: no `manifest.xml` in the mod's root, an empty or invalid `<ID>` (letters, digits, `_`, `-`, `.` only), no `<Assemblies>` or `<Capabilities>` element, an `<Assemblies>` with no `<Assembly>` child, an assembly path that is rooted, contains `..` or does not end in `.dll`, an unknown capability name (all logged as `[ModLoader] ...`), or a listed DLL that does not exist or no listed DLL with a class implementing `IMod` (logged as `[Your Mod Name] Error: ...`). The launch log names the exact problem. |
 | Mod appears but nothing happens | The mod isn't enabled, or you didn't restart after enabling it. **Enabling, disabling, and reordering only take effect on the next launch.** |
-| `[Your Mod Name] Error: ...` in the console, and a warning icon on your mod in the Mods menu | Your DLL failed to load (a library it references is missing, or it targets the wrong framework), or `Init`, `OnEnable`, or a Harmony patch threw. The line names the exception and the full stack trace follows it. When a mod from the `Mods/` folder fails, the console opens on its own at launch (Workshop mods only get the warning icon). The mod stays in the active list so you can deactivate it. |
-| Code changes don't take effect | You copied an old DLL. Rebuild (`dotnet build -c Release`) and copy the fresh DLL from `bin/Release/netstandard2.1/` into the mod folder. |
+| Mod is active but shows a warning icon and "Not loaded: ..." | The trust check kept it out this start. *Not yet approved on this computer*: select it and use **Review and enable**. *Changed since you approved it (reason)*: your files changed in a way that needs a fresh approval; the reason is one of "the new version asks for new capabilities", "the new version uses capabilities it does not declare", "the new version was refused by the mod scanner", "its folder contains DLLs the manifest does not list", "it now comes from a different place than the approved copy" or "it is a different Workshop item" (local copy versus subscription), or "its files could not be checked" (a DLL locked by your build or an antivirus). Fix what it says, then **Review and enable**. *Blocked by the developers*: the version is on the remote block list. *Mod loading is paused by the developers*: an emergency pause for everyone, nothing to do on your side. While developing a local mod, turn on **Developer mode** in the detail pane so rebuilds are trusted without this step. |
+| Activation is refused: "uses capabilities its manifest does not declare" | Run `mod-scan <id>` in the F8 console: each finding names the method and the API it reaches. Either declare the capability in `<Capabilities>` or switch to a capability-free alternative (the table in [Declaring capabilities](#declaring-capabilities)). Most `reflection-external` findings disappear by using `typeof(GameType)` instead of a string. |
+| Activation is refused: "refused by the mod scanner" or "DLLs in its folder that its manifest does not list" | A hard refusal: an unlisted DLL in the folder or a reference to an assembly that is neither the game's nor listed, an embedded executable or encrypted resource, suspicious string constants, `UnpatchAll()` without an id, a patch on the loader, or a bundled `0Harmony`. `mod-scan` names it. See [Hard refusals](#hard-refusals). |
+| `[Your Mod Name] Error: ...` in the console, and a warning icon on your mod in the Mods menu | Your DLL failed to load (a library it references is missing, or it targets the wrong framework), a DLL carries the name of a game assembly, or `Init`, `OnEnable`, or a Harmony patch threw. The line names the exception and the full stack trace follows it. When a mod from the `Mods/` folder fails, the console opens on its own at launch (Workshop mods only get the warning icon). The mod stays in the active list so you can deactivate it. |
+| Code changes don't take effect | You copied an old DLL. Rebuild (`dotnet build -c Release`); a project made with `create-mod.bat` installs itself into `Mods\`, otherwise copy the fresh DLL from `bin/Release/netstandard2.1/` into the mod folder. Then check the Mods menu: a rebuild changes the hashes, so without **Developer mode** the mod may wait for **Review and enable**. |
+| A library I bundle is refused or forces capabilities | Every DLL you ship must be listed in `<Assemblies>` and is scanned like your code. Libraries the game already ships (`0Harmony`, `Newtonsoft.Json`, Unity assemblies) must not be bundled at all; reference the game's copies. Other libraries that use `Reflection.Emit` or reflection internally make those capabilities yours to declare. |
 | Item shows the "unknown" placeholder sprite | The `spriteKey` or mod ID passed to `SetSpriteAndShapeFromMod` doesn't match. The key is the **file name** (no extension, no folder); the ID is your manifest `<ID>`, **not** the folder name. Check the `item sprite(s) loaded` count in the console. |
 | A sprite file is ignored entirely | It isn't *directly* inside `Textures/Items/` (subfolders aren't scanned), or it isn't a `.png`/`.jpg`. |
 | `PlaySound` returns false / warning `Audio identifier ... was not found` | The mod ID or sound key doesn't match. The full identifier is `<manifest ID>:<file name without extension>`. Check the `sound(s) loaded` count in the console. Sounds also finish loading a few frames after startup ([wait for them](#knowing-when-your-assets-are-ready) if playing very early). |

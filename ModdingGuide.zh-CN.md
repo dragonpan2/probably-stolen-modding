@@ -14,9 +14,9 @@ English version: [ModdingGuide.md](ModdingGuide.md)
   - [开发工具](#开发工具)
     - [添加你自己的调试按钮](#添加你自己的调试按钮)
   - [对存档负责](#对存档负责)
-  - [已支持与暂不支持的模组功能](#已支持与暂不支持的模组功能)
+  - [已支持与不支持的模组功能](#已支持与不支持的模组功能)
     - [✅ 原生支持](#-原生支持)
-    - [❌ 暂不支持](#-暂不支持)
+    - [❌ 不支持](#-不支持)
   - [模组资源](#模组资源)
     - [物品精灵图](#物品精灵图)
     - [声音](#声音)
@@ -73,6 +73,8 @@ English version: [ModdingGuide.md](ModdingGuide.md)
 
 📁 完整的示例模组项目与本指南一起收录在本仓库中。它们是完整、可构建的模组，你可以打开、研究并改造。当这里的代码片段不足以让你看清各部分如何组合成一个完整项目时，就去参考它们。
 
+🛠️ 要开始你自己的模组，在游戏文件夹（与 `Probably Stolen.exe` 同级）运行本仓库中的 `create-mod.bat`。它会询问 ID、名称、作者、版本、描述和目标游戏版本，然后生成一个项目：正确的 `manifest.xml`（包含必填的 `<Assemblies>` 和 `<Capabilities />` 元素）、一个 `IMod` 入口类、资源文件夹，以及每次编译后把模组安装到 `Mods\` 的构建步骤。仅限 Windows；手动步骤见 [README](README.zh-CN.md)。
+
 ---
 
 ## 用 ModLog 记录日志
@@ -113,7 +115,7 @@ namespace MyMod
 
 Probably Stolen 内置了两个在开发和测试模组时必不可少的工具。
 
-- 🐛 **调试控制台（`F8`）**：打开一个显示全部日志输出的控制台，包括 `ModLog`、`Debug.Log`、警告和错误。用它确认模组已加载、观察钩子点触发，以及在出错时阅读堆栈跟踪。
+- 🐛 **调试控制台（`F8`）**：打开一个显示全部日志输出的控制台，包括 `ModLog`、`Debug.Log`、警告和错误。用它确认模组已加载、观察钩子点触发，以及在出错时阅读堆栈跟踪。你的模组自己的 `Debug.Log` 和 `ModLog` 输出始终显示，模组加载器的输出也一样；游戏本身的信息日志默认隐藏，需在 **F9 > Command > Toggle Verbose Log** 中开启（警告和错误始终显示）。
 - 🛠️ **开发菜单（`F9`）**：打开一个包含许多对模组开发和测试有用的功能的菜单，例如生成物品、触发事件、查看游戏状态。用于复现边缘情况，而不必一路玩到那里。按钮分为五列：Store（商店）、Command（命令）、Spawn（生成）、Special（特殊）和 Modding（模组工具：纸质手册编辑器、重新载入手册、资源查看器；见[纸质手册](#纸质手册)）。
 
 ### 添加你自己的调试按钮
@@ -161,28 +163,31 @@ public void OnDisable()
 
 ---
 
-## 已支持与暂不支持的模组功能
+## 已支持与不支持的模组功能
 
-目前并非所有类型的模组都可行。开始一个项目之前，请确认你的想法在已支持列表中；否则你可能会撞上当前模组 API 无法绕过的墙。
+下面的"支持"指游戏为此提供了专门的 API，本指南有记录，并且我们会在更新中保持它可用。其他一切仍然可以通过 Harmony 做到，但要靠你自己：游戏更新可能毫无预兆地弄坏它，本指南也帮不上忙。
 
 ### ✅ 原生支持
 
-- **带自定义精灵图的模组物品**：向游戏添加新物品，包括它们的美术资源
-- **带自定义精灵图的模组顾客**：添加拥有自己外观的新顾客
-- **模组事件**：添加新的游戏内事件
+- **带自定义精灵图的模组物品**：向游戏添加新物品，包括它们的美术资源（[钩子点](#通过物品目录钩子添加物品)、[模组资源](#模组资源)）
+- **顾客生成**：通过 `OnGenerateCustomer*` 钩子在顾客生成时修改它，钩子会把 `StoreClientManager` 交给你（[钩子点](#可用钩子)）
 - **掉落表编辑**：把你的物品放进游戏的掉落表、修改或移除已有掉落，或者添加全新的表，可通过代码或 JSON 文件完成（[掉落表](#掉落表)）
 - **自定义 UI**：用游戏的控件从代码构建你自己的窗口和面板（设置、查看器、计数器）（[自定义 UI](#自定义-ui)）
 - **纸质手册**：游戏纸张风格的指南、名片和单页，用游戏内编辑器排版并保存为 JSON，附带打开它的物品（[纸质手册](#纸质手册)）
+- **机器窗口**、**游戏选项**、**人脉升级**、**起始方案与天赋**、**难度**、**夜间地点与事件**：下文各有专门小节
+- **模组配置与模组数据**：带生成面板的类型化设置、按局保存的键值存储，以及你自己文件夹中的文件（[模组配置](#模组配置)、[保存模组数据](#保存模组数据)）
 
-### ❌ 暂不支持
+### ❌ 不支持
 
-- **对现有 UI 的大改**：重构或替换内置 UI
-- **修改商店**：修改商店的行为或内容
+- **新的顾客精灵图和新的客户阵营**：没有注册它们的 API；生成钩子只能修改游戏已经生成的内容
+- **改动现有 UI**：重构或替换内置界面；请改为添加你自己的窗口
+- **改动商店的布局或核心循环**：柜台、昼夜周期、议价
 - **大修型模组**：一次触及许多系统的大规模重做
+
 - **地下交易所的模组交易**：向地下交易所添加新的交易
 - **特殊物品**：可检视物品和鉴定物品
 
-暂不支持的功能将来可能会得到支持。
+不支持的功能可能在以后的更新中得到支持。这个列表中的任何内容仍然可以尝试用 Harmony 补丁实现。请做好每次游戏更新后自行维护的准备，并记住[能力规则](#能力声明与扫描器)：对游戏代码打补丁是免费的，但反射进引擎或系统类型属于需要声明的能力。
 
 ---
 
@@ -426,6 +431,18 @@ void RegisterItems(ModItemDirectory dir)
 
 注册后，可以在任何地方用 `ModHelper.SpawnItem("health_pack")` 生成它。
 
+**放置生成的物品。** `SpawnItem` 返回的 `GameItem` 还不在任何地方；把它交给下面之一，它们会像游戏自己那样把物品放进商店的容器（有空位时）：
+
+| 辅助方法 | 物品去向 |
+|---|---|
+| `ModHelper.MoveItemToInventory(item)` | 玩家背包 |
+| `ModHelper.MoveItemToFrontCounter(item)` / `MoveItemToBackCounter(item)` | 前柜台或后柜台 |
+| `ModHelper.MoveItemToDisplayCase(item)` | 展示柜 |
+| `ModHelper.MoveItemToTrash(item)` | 垃圾桶 |
+| `ModHelper.MoveItemToAfterhours(item)` | 夜间背包（玩家夜出带回的东西） |
+
+`ModHelper.SetItemOwnerShip(item, isOwn)` 把物品标记为玩家的（true）或顾客的（false）并返回它，因此可以链式调用：`ModHelper.MoveItemToFrontCounter(ModHelper.SetItemOwnerShip(ModHelper.SpawnItem("health_pack"), false))`。`ModHelper.SetSource(item, modId, modName)` 以标签（`ModHelper.MOD_ID_TAG` / `MOD_NAME_TAG`）把你的模组 ID 和名称盖在物品上，这样你的代码或其他模组可以通过 `item.GetTagReadonly(ModHelper.MOD_ID_TAG).GetString()` 知道物品来自哪里。游戏本身不读取它们；由你的纸质手册生成的物品自带这些标签，其他物品只有你调用时才有。这些辅助方法需要一局已载入的游戏：主菜单中商店的容器尚不存在，所以在 `Init` 或 `OnEnable` 中调用会抛出 `NullReferenceException`。请在 `OnGameLoadedInit` 之类的钩子里或你自己的 UI 中调用。
+
 ### 可用钩子
 
 把 `*` 替换为层级名，例如 `ModHook.OnGenerateCustomerVeryEarly`、`ModHook.OnShutterClosedLate`。
@@ -601,11 +618,13 @@ Loot table 'junkTable', 1000 roll(s):
 ```csharp
 // 写入。键按你的模组 ID 隔离命名空间，所以名字随意。
 ModHelper.SetModDataInt("my_mod_id", "deliveries", 3);
+ModHelper.SetModDataFloat("my_mod_id", "reputation", 0.75f);
 ModHelper.SetModDataBool("my_mod_id", "met_courier", true);
 ModHelper.SetModData("my_mod_id", "route", JsonUtility.ToJson(routeState));
 
 // 读取，并为从未写入过的键提供回退值。
 int deliveries = ModHelper.GetModDataInt("my_mod_id", "deliveries", 0);
+float reputation = ModHelper.GetModDataFloat("my_mod_id", "reputation", 0f);
 bool met = ModHelper.GetModDataBool("my_mod_id", "met_courier");
 RouteState route = JsonUtility.FromJson<RouteState>(ModHelper.GetModData("my_mod_id", "route", "{}"));
 
@@ -624,6 +643,8 @@ ModHelper.ClearModData("my_mod_id");     // 清除你的模组在本局中存的
 - **禁用的模组保留其数据。** 模组被关闭时不会清理任何东西，所以重新启用会恢复其状态。如果你的模组想要一个干净的开始，请自己调用 `ClearModData`。
 - **保持小巧。** 这个存储在每次保存时都会写入。几 KB 没问题；不要往里塞大块数据或每帧的数据。
 - **它不是用来存物品数据的。** 属于某个特定物品的东西应放在该物品的标签上（`item.ModifyTag` / `GetTagReadonly`），它们随物品保存并跟随物品移动。
+
+**文件。** 对于不按局保存的数据（缓存、导出、玩家手动编辑的东西），`ModHelper` 提供了无需 `files` 能力的文件辅助方法：`ReadModFileText` / `ReadModFileBytes` / `ModFileExists` 读取你的模组文件夹（`GetModFolder` 告诉你它在哪里）；`GetModDataFolder`、`ModDataFileExists`、`ReadModDataFileText` / `Bytes`、`WriteModDataFileText` / `Bytes`、`DeleteModDataFile` 和 `ListModDataFiles` 读写存档位置下属于你的文件夹。只接受相对路径。示例和规则见[不声明能力也能读写文件](#不声明能力也能读写文件)。
 
 ---
 
@@ -727,11 +748,11 @@ window.Hide(); window.Show(); window.Close(); // Close 会销毁并注销窗口
 
 手册字段：`id`（默认为文件名）、`title`（仅编辑器使用）、`background`（原版精灵图名，如 `notebook_manual`、`guide_reworked`、`tutorial_sheet`、`business_card_template`、`exchange`、`test_strips`；你的 `Textures/Paper/` 中的文件名；或 `"modId:name"`）、`width`/`height`（显示尺寸；对原版背景填 0 则沿用原版尺寸）、`designWidth`/`designHeight`（覆盖坐标空间；0 表示背景的像素尺寸）、`border`（`[左, 下, 右, 上]`，拉伸背景用的九宫格边距）、`posX`/`posY`（面板打开的位置，相对屏幕中心的偏移；原版指南用 -450, 0）、`sounds`、`draggable`、`zoomable`（默认 true）、`chrome`（每一页都绘制的元素）、`templates`、`pages`、`item`。
 
-元素字段：`type`（`text`、`image`、`button`、`flow`）、`id`、`x`、`y`、`w`、`h`、`visible`、`locked`（仅编辑器）、`raycast`（文字和图片默认不拦截点击，设为 true 才拦截）。文字：`text` 或 `loc`（你的 `Localization/*.csv` 中的键，优先于 `text`）、`style`、`fontSize`（0 沿用样式字号）、`align`（`left`、`center`、`right`）、`valign`（`top`、`middle`、`bottom`）、`color`（`#rrggbb`）、`wrap`、`autoHeight`（随文字增高）、`preview`（仅编辑器显示的示例，用于由代码填入的文字）。图片：`sprite`、`fit`（`stretch`、`fit`、`native`）。按钮：`action`（你在代码中绑定的名字；`close`、`zoom`、`flip_left`、`flip_right` 由手册自己处理）、文字按钮用 `text`（蓝色底板）、图标按钮用 `sprite` 和可选的 `hoverSprite`。流式区域：`spacing`、`align`；子元素把 `flow` 设为该区域的 ID，会被纵向堆叠（文字高度由内容决定）。模板元素可以带 `slot` 名；页面的 `slots` 映射填充它们（文字填文本，图片填精灵图键）。
+元素字段：`type`（`text`、`image`、`button`、`flow`、`line`）、`id`、`x`、`y`、`w`、`h`、`visible`、`locked`（仅编辑器）、`raycast`（文字和图片默认不拦截点击，设为 true 才拦截）。文字：`text` 或 `loc`（你的 `Localization/*.csv` 中的键，优先于 `text`）、`translations`（按语言代码给出的文字，如 `{"zh": "..."}`，选中该语言时使用；少量文字不想做 csv 时很方便）、`style`、`fontSize`（0 沿用样式字号）、`align`（`left`、`center`、`right`）、`valign`（`top`、`middle`、`bottom`）、`color`（`#rrggbb`）、`wrap`、`autoHeight`（随文字增高）、`preview`（仅编辑器显示的示例，用于由代码填入的文字）。图片：`sprite`、`fit`（`stretch`、`fit`、`native`）、`scale`（native 模式下按像素尺寸乘以该倍数绘制；整数倍能保持像素画清晰）、`color`（着色）、`silhouette`（把所有不透明像素涂成 `color`，即一个平涂的剪影）、`fill`（`#rrggbb`，填充精灵图轮廓所包围的透明像素；开局职业图标是为青色圆底绘制的深色圆环，放在深色背景上时需要设置它）。线条：从 `x`、`y` 到 `x2`、`y2`，`thickness`（粗细）、`arrow`（`none`、`end`、`start`、`both`）、`arrowSize`（箭头大小）、`color`（留空为墨色）。按钮：`action`（你在代码中绑定的名字；`close`、`zoom`、`flip_left`、`flip_right` 由手册自己处理）、文字按钮用 `text`（蓝色底板）、图标按钮用 `sprite` 和可选的 `hoverSprite`。流式区域：`spacing`、`align`；子元素把 `flow` 设为该区域的 ID，会被纵向堆叠（文字高度由内容决定）。模板元素可以带 `slot` 名；页面的 `slots` 映射填充它们（文字填文本，图片填精灵图键）。
 
 物品字段：`id`（物品标识，用 `ModHelper.SpawnItem` 生成）、`name`/`nameLoc`、`description`/`descriptionLoc`、`sprite`（原版物品图集中的 `atlas/sprite`，默认 `items_misc/manual1`，或 `Textures/Items/` 中的文件名）、`value`、`important`（不可被偷，默认 true）。该物品是一份文档：阅读它就打开手册。
 
-文字样式：`header`（"Station Trade Commission" 印章，Tektur）、`title`（Noto Sans Medium）、`section` 和 `body`（Noto Serif）、`caption` 和 `label`（Noto Sans Bold）、`serif_title`（Noto Serif Bold）、`handwritten` 和 `page_number`（Caveat）、`stamp`（红色 LCD 风格）、`button`（文字按钮标签）。样式对应字体角色，所以会和游戏其他部分一样按语言切换字体。
+文字样式：`header`（"Station Trade Commission" 印章，Tektur）、`title`（Noto Sans Medium）、`section` 和 `body`（Noto Serif）、`caption` 和 `label`（Noto Sans Bold）、`serif_title`（Noto Serif Bold）、`handwritten` 和 `page_number`（Caveat）、`stamp`（红色 LCD 风格）、`button`（文字按钮标签），以及 Meta 面板的深色选项界面风格：`meta_header`（粗体）、`meta_body`、`meta_warning`。样式对应字体角色，所以会和游戏其他部分一样按语言切换字体。
 
 ### 给手册绑定代码
 
@@ -748,7 +769,7 @@ public void OnEnable()
 }
 ```
 
-- `ModHelper.OpenPaper(modId, bookId)` 打开一本手册（或把它提到最前）并返回 `PaperUI`；`ClosePaper`、`IsPaperOpen`、`GetOpenPaper` 顾名思义。`ModHelper.SpawnPaperItem(modId, bookId)` 生成声明的物品；`ModHelper.GetPaperBookIds(modId)` 列出你的手册。
+- `ModHelper.OpenPaper(modId, bookId)` 打开一本手册（或把它提到最前）并返回 `PaperUI`；`ClosePaper`、`IsPaperOpen`、`GetOpenPaper` 顾名思义。`ModHelper.SpawnPaperItem(modId, bookId)` 生成声明的物品；`ModHelper.GetPaperBookIds(modId)` 列出你的手册；`ModHelper.RemovePaperBooks(modId)` 注销你模组的所有手册（已打开的面板会关闭）并返回数量。
 - 在 `PaperUI` 上：`OnAction(name, callback)` 绑定按钮，`Get(id)` 返回带常用 setter 的元素句柄（`SetText`、`SetSprite`、`SetVisible`、`OnClick`……），`SetText(id, text)` 和 `SetSprite(id, key)` 是快捷方式，还有 `FlipTo(page)`、`CurrentPage`、`PageCount`、`Hide()`、`Close()`，以及事件 `PageShown`、`Closed`、`ActionFired`。
 - `ModHook.OnPaperOpened(string fullId, PaperUI ui)` 是同一信号的全局形式（"modId:bookId"）。
 - 手册随模组资源一起注册，晚于 `OnEnable`，所以在文件载入之前就在 `OnEnable` 中调用 `OnPaperOpened` 是安全的。
@@ -774,7 +795,7 @@ PaperUI ui = ModHelper.CreatePaper("my_mod_id", "recipes", "notebook_manual")
 
 ### 原版美术与你自己的美术
 
-精灵图选择器以及 `background` / `sprite` 键接受原版纸质面板使用的所有精灵图，按精灵图名称：背景（`notebook_manual`、`guide_reworked`、`guide`、`tutorial_sheet`、`business_card_template`、`exchange`、`test_strips`、`mentors_notes`……）、外框按钮（`paper_buttons_close1`、`paper_buttons_screen_0`、`paper_buttons_l_1`、`paper_buttons1`、`blue_button_2x`）、指南页眉（`guide_logo`）以及原版指南的插图。**F9 > Modding > Paper Sprite Picker** 可以浏览它们并复制键。你自己的美术放在模组的 `Textures/Paper/` 中（PNG 或 JPG，作为平滑的 UI 精灵图载入），按文件名引用，或在其他模组的手册中用 `"my_mod_id:name"` 引用。`Textures/Items/` 中的物品精灵图也可以用。
+精灵图选择器以及 `background` / `sprite` 键接受原版纸质面板使用的所有精灵图，按精灵图名称：背景（`notebook_manual`、`guide_reworked`、`guide`、`tutorial_sheet`、`business_card_template`、`exchange`、`test_strips`、`mentors_notes`……）、外框按钮（`paper_buttons_close1`、`paper_buttons_screen_0`、`paper_buttons_l_1`、`paper_buttons1`、`blue_button_2x`）、指南页眉（`guide_logo`）以及原版指南的插图。**F9 > Modding > Paper Sprite Picker** 可以浏览它们并复制键。你自己的美术放在模组的 `Textures/Paper/` 中（PNG 或 JPG，作为平滑的 UI 精灵图载入），按文件名引用，或在其他模组的手册中用 `"my_mod_id:name"` 引用。`Textures/Items/` 中的物品精灵图也可以用。另外两类：原版物品精灵图写作 `图集/名称`（`items_aquaculture/tilapia_large1`、`items_misc/manual1`；调色板中的 *Item sprite from the game atlases* 按钮会列出它们），以及深色选项界面的外框，写作 `meta_` 加精灵图名称（`meta_panel` 是九宫格底板，也可以用作背景；`meta_seperator`、`meta_checkbox`……），以及按名称引用的开局职业图标（`icons_apprentice`、`icons_aquaculture`……）。
 
 控制台命令（F8）：`paper-list`、`paper-open <id>`、`paper-close [id]`、`paper-reload`、`paper-edit [id]`、`paper-item <id>`。F9 的 Modding 列有 **Reload Mod Books**，用于游戏运行中新增或修改的文件。
 
@@ -850,7 +871,7 @@ public void OnDisable()
 
 - **值由你保管。** 游戏只通过 getter 读取、通过 setter 写入，所以请把它存在合适的地方：全局偏好用 `PlayerPrefs` 或 ES3，与本局游戏绑定的用[模组数据](#保存模组数据)。getter 在每次窗口打开时运行；setter 只在"应用"时运行，玩家还在拖动滑块时不会调用。
 - **标签、提示和下拉选项都是函数**，每次窗口打开时重新求值，所以 `() => ModHelper.GetLocalized(...)` 能跟随语言切换。提供 tooltip 会在标签旁加一个信息图标。
-- **ID 有命名空间。** `optionId` 和你自己的分区 ID 在内部都会加上模组 ID 前缀，因此不会与其他模组冲突。重复注册同一个 ID 会替换之前的条目。`RemoveGameOption(modId, optionId)` 和 `RemoveGameOptions(modId)` 可以再移除它们。
+- **ID 有命名空间。** `optionId` 和你自己的分区 ID 在内部都会加上模组 ID 前缀，因此不会与其他模组冲突。重复注册同一个 ID 会替换之前的条目。`RemoveGameOption(modId, optionId)` 和 `RemoveGameOptions(modId)` 可以再移除它们。`ModHelper.GameOptionId(modId, optionId)` 返回游戏内部使用的带前缀 id（`"modId:optionId"`），用于极少数需要按完整 id 匹配条目的场合。
 - **顺序**为分区内的注册顺序；你的分区排在内置分区之后。
 - **按键绑定**会拒绝 Escape、数字键以及窗口中其他绑定行已占用的按键，且只能捕获键盘按键。玩家选择按键期间，游戏自己的快捷键保持静默；你的也应如此：`KeyBindHelper.SuppressHotkeys` 为 true 时跳过轮询。
 - 可在 `OnEnable` 中调用；窗口每次打开都会重新构建。
@@ -1109,7 +1130,7 @@ public void OnDisable()
 - **面板**由你的 `buildPanel(CustomUIBuilder)` 构建（标签、按钮、开关、滑块、图片：见自定义 UI），返回按钮会加在你的控件之后。`ReturnFromAfterhour()` 可以从你自己的控件返回。模组如果自己构建了面板 GameObject，可以设置 `panelObject`，游戏会激活它而不再生成面板（这时它需要自己的返回控件）。
 - **图片与场景。** `imageKey` 和 `backgroundKey` 使用与 `AddImage` 相同的查找方式（`"modId:spriteName"`）。卡片把图片裁剪到 296x168 并保持比例；场景精灵图绘制在原点，排序顺序为 `backgroundSortingOrder`（默认 20；原版美术为 960x540）。模组如果自己构建了场景 GameObject，可以改为设置 `stageObject`，玩家停留期间游戏会激活它。没有图片时卡片显示占位板。
 - **`isAvailable`** 返回假时卡片变灰并显示"不可用"，不能前往；`isDiscovered` 返回假时则不显示。两者在每次打开界面时都会询问。
-- **我在哪里。** `ModHelper.IsOutsideStore()` 和 `GetCurrentAfterhourLocationId()`；钩子 `ModHook.OnAfterhourArriveEarly / Late` 和 `OnAfterhourLeaveEarly / Late` 对每个地点（包括原版的 `AfterhourLocation.DUMPING_GROUND`、`COMMISSARY`、`DR_JACKSON`）都会带着地点 ID 触发。
+- **我在哪里。** `ModHelper.IsOutsideStore()` 和 `GetCurrentAfterhourLocationId()`；`GetAfterhourLocation(id)` 返回任意地点（原版或模组）的定义，未知 id 返回 null；钩子 `ModHook.OnAfterhourArriveEarly / Late` 和 `OnAfterhourLeaveEarly / Late` 对每个地点（包括原版的 `AfterhourLocation.DUMPING_GROUND`、`COMMISSARY`、`DR_JACKSON`）都会带着地点 ID 触发。
 - **状态。** `GetAfterhourVisits(id)`、`GetAfterhourCounter(id, key)` / `SetAfterhourCounter(id, key, value)` 随本局存档保存在地点 ID 名下。
 - **事件。** 一个地点上可以同时运行多个事件。带 `dailyChancePercent` 的 `AddAfterhourEvent` 会在它尚未运行时于每天开始自动开始（用 `maxConcurrentEvents` 限制地点上的数量），带 `weekdays`（`AfterhourWeekday.Wednesday`……）的则在空间站一周的那些日子开始（第 1 天是周一；有计划事件开始的那天不会出现随机事件）；`closesLocation: true` 会让地点在事件进行期间不可用（卡片变灰、不能前往，事件仍会列出）；`StartAfterhourEvent(eventId, days)` 从代码添加一个（已在运行的则延长），`EndAfterhourEvent(eventId)` 结束一个，`EndAllAfterhourEvents(locationId)` 结束全部；`IsAfterhourEventActive(eventId)`、`GetActiveAfterhourEventIds(locationId)` 和 `GetAfterhourModifier(locationId, key)`（所有进行中事件之和）读取它们；你自己的机制读取你自己的修正值名称。原版修正值都是在游戏已有几率基础上的相对百分比（效果行写作"几率提高 / 降低 X%"）：垃圾场读取 `injury_chance`（缩放两种受伤几率）、`junk_chance`（缩放战利品掷骰中垃圾表的权重，负值表示更少垃圾）和 `loot_double_chance`（加到扫描仪双倍战利品几率上的百分点）；另有两个不是几率：`injury_immunity`（大于 0 时完全不会受伤）和 `scav_attempts`（每晚固定增加的搜刮次数）。杰克逊博士处读取 `inventor_sell_price`（他店内售价的相对变化），配给站读取 `commissary_restock_percent_of_max`（每天开始时按每件物品最大库存的百分比补货）。原版事件（`fresh_dump`、`georgio_assistance`、`special_stock`、`jackson_discount`、`commissary_burglary`、`fresh_restock`）就使用它们。卡片上的标题在所有效果都有利时为绿色，都不利时为红色，混合时为橙色（传入 `tone` 可强制指定）；剩余天数显示在描述之后。`ModHook.OnAfterhourEventStarted / Ended` 带着地点 ID 和事件 ID 触发。F9 控制台的 `afterhour-events`、`afterhour-event-start` 和 `afterhour-event-end` 可用于测试。
 
@@ -1175,11 +1196,13 @@ public class MyMod : IMod
 
 ## 能力声明与扫描器
 
-模组 DLL 与游戏本体拥有同样的权限，所以游戏无法让一个模组变得"安全"。游戏做的是：把玩家点击**启用**变成一个知情的决定，并准确记住批准的是什么。玩家启用你的模组时，游戏会读取你的 DLL（不加载它们），在写入批准之前检查三件事：
+模组 DLL 与游戏本体拥有同样的权限，所以游戏无法让一个模组变得"安全"。游戏做的是：把玩家点击**启用**变成一个知情的决定，并准确记住批准的是什么。玩家启用你的模组时，游戏会读取你的 DLL（不加载它们），在写入批准之前按以下顺序检查：
 
-1. 开发者的远程封禁名单（被发现有恶意的模组会在数小时内于所有玩家的机器上被拒绝，无需游戏更新）；
-2. 你的 DLL 没有使用游戏或框架程序集的名字（`0Harmony`、`Assembly-CSharp`、`UnityEngine.*`、`Steamworks.NET`、`mscorlib` 等）；
-3. 你的代码触及的一切都被清单中的 `<Capabilities>` 元素覆盖。
+1. 文件夹中的每个 DLL 都列在 `<Assemblies>` 中（未列出的 DLL 会被运行时不经扫描直接加载）；
+2. 开发者的远程封禁名单和紧急暂停（被发现有恶意的模组会在数小时内于所有玩家的机器上被拒绝，无需游戏更新）；
+3. 所列的每个 DLL 都存在，且没有使用游戏或框架程序集的名字（`0Harmony`、`Assembly-CSharp`、`UnityEngine.*`、`Steamworks.NET`、`mscorlib` 等）；
+4. 代码中没有下文[一律拒绝的情况](#一律拒绝的情况)；
+5. 你的代码触及的一切都被清单中的 `<Capabilities>` 元素覆盖。
 
 批准会记录清单和所列 DLL 的哈希。此后只要文件仍然一致，或者变化了但没有新增能力，模组就会在每次启动时加载。
 
@@ -1189,12 +1212,12 @@ public class MyMod : IMod
 
 | 能力 | 触发条件 | 无需能力的替代方案 |
 |---|---|---|
-| `files` | `System.IO.File`、`FileStream`、`Directory`、`FileInfo`、`DirectoryInfo`、以路径打开的 `StreamReader` / `StreamWriter`、带路径参数的 ES3 重载、`UnityEngine.Windows.File` | 设置用 `ModHelper.GetConfig`，局内数据用 `SetModData`，文件用 `ReadModFile*` 和 `*ModDataFile*`（见下文） |
-| `network` | `System.Net.*`（`HttpClient`、`WebClient`、套接字）、`UnityWebRequest`、`WWW`、Steam 的 HTTP 与网络 API | 无，请声明 |
+| `files` | `System.IO.File`、`FileStream`、`Directory`、`FileInfo`、`DirectoryInfo`、以路径打开的 `StreamReader` / `StreamWriter`、传入路径的 `XDocument` / `XmlDocument` / `XmlReader` / `XmlWriter`、`ZipFile`、内存映射文件、Windows 注册表（`Registry`）、`ScreenCapture`、`AssetBundle`、`UnityEngine.Windows.File`；Easy Save：`ES3File`、`ES3Writer`、`ES3Reader`、`ES3Directory`、带路径或两个字符串（键和文件）的 `ES3` 方法、`new ES3Settings(path)` 和 `settings.path =`（按键的 `ES3.Save(key, value)` 是免费的） | 设置用 `ModHelper.GetConfig`，局内数据用 `SetModData`，文件用 `ReadModFile*` 和 `*ModDataFile*`（见下文） |
+| `network` | `System.Net.*`（`HttpClient`、`WebClient`、套接字；`WebUtility` 和 `IPAddress` 除外）、`UnityWebRequest`、`WWW`、`Ping`、Steam 的 HTTP 与网络 API | 无，请声明 |
 | `process` | `System.Diagnostics.Process`、`ProcessStartInfo`、`Application.OpenURL`（它调用 ShellExecute，可以启动程序） | 无，请声明 |
-| `dynamic-code` | `Assembly.Load*`、`AppDomain.Load`、`Reflection.Emit`、`Activator.CreateInstanceFrom`、看起来像加密数据的嵌入资源 | 无，请声明 |
+| `dynamic-code` | `Assembly.Load*`、`AppDomain.Load`、`Reflection.Emit`、`Activator.CreateInstanceFrom`、`Activator.CreateInstance(assemblyName, ...)`、编译表达式树（`Expression.Compile()`）、`BinaryFormatter` 及其他 `Formatters` 反序列化器、`CSharpCodeProvider` | 无，请声明 |
 | `native` | `DllImport`、`unsafe` 代码与指针、`calli`、`Marshal`、`UnsafeUtility` | 无，请声明 |
-| `reflection-external` | `Type.GetType`、`GetMethod` / `GetField` / `GetProperty` / `InvokeMember`、`Assembly.GetType`、使用**拼接出的**名称的 `AccessTools` 或 `Traverse`，或者字面名称位于 `System.`、`UnityEngine.`、`HarmonyLib.`、`Steamworks.`、`ES3` 之下 | 用 `typeof(GameItem)` 或游戏类型的字面名称反射游戏类型：这是免费的 |
+| `reflection-external` | `Type.GetType`、`GetMethod` / `GetField` / `GetProperty` / `InvokeMember`、`Assembly.GetType` / `GetTypes`、使用**拼接出的**名称或类型的 `AccessTools` 或 `Traverse`，或者字面名称位于 `System.`、`UnityEngine.`、`HarmonyLib.`、`Steamworks.`、`ES3` 之下；C# 的 `dynamic` 关键字（它编译为运行时绑定器） | 用 `typeof(GameItem)` 或游戏类型的字面名称反射游戏类型：这是免费的 |
 
 只有游戏自己的类型（`Assembly-CSharp`）和你自己的类型可以自由反射。扫描器会沿 IL 回溯到产生类型或名称的那条指令；无法判断时（值来自变量、分支、方法调用）按"拼接"处理，所以请优先写 `AccessTools.Method(typeof(PlayerStore), "ModCash")` 而不是用字符串拼出的 `AccessTools.Method("PlayerStore:ModCash")`，优先用 `typeof(X)` 而不是 `someObject.GetType()`。
 
@@ -1206,9 +1229,9 @@ public class MyMod : IMod
 
 - 嵌入资源是可执行文件，或任何看起来像加密数据的资源（高熵且不是已知的图片、音频、文本或 `.resources` 格式）；
 - 指向浏览器配置、Steam 登录文件、Discord 数据或加密货币钱包的字符串常量；
-- 一千个或更多 base64 字符组成的字符串常量（隐藏的载荷）；
-- 不带你自己 Harmony id 的 `Harmony.UnpatchAll()`（它会移除所有模组的补丁）；
-- 针对游戏模组加载器或信任代码（`ModLoader`、`ModTrust`、`ModScanner`、`ModTrustList`）的 Harmony 补丁或反射；
+- 1024 个或更多 base64 字符组成的字符串常量（隐藏的载荷）；
+- 传入字面 `null` id 的 `Harmony.UnpatchAll()`（它会移除所有模组的补丁，包括游戏自己的修复）；
+- 针对游戏模组加载器或信任代码的 Harmony 补丁或反射：`ModLoader`、`ModTrust`、`ModTrustRecord`、`ModFingerprint`、`ModTrustList`、`ModScanner`、`ModCapability`、`ModSecurityDebug`；
 - 自带 `0Harmony`、MonoMod 或 Cecil，或任何与游戏程序集同名的 DLL（包括游戏已经附带的库，例如 `Newtonsoft.Json`）。请引用游戏自带的副本；
 - 文件夹中有 `<Assemblies>` 未列出的 DLL，或者所列 DLL 引用了既不是游戏的、也未列出的程序集。运行时会不经扫描直接从你的文件夹加载这种文件，所以整个模组会被拒绝，直到清单把它列出来。
 
@@ -1216,20 +1239,24 @@ public class MyMod : IMod
 
 ### 发布前自查
 
-打开控制台（F8），运行 `mod-scan <你的模组ID>`（任何已列出的模组，启用与否均可）或 `mod-scan <文件夹路径>`。它会打印所列程序集、文件夹中未列出的 DLL、清单声明的能力、扫描器检测到的能力、每条发现（格式为 `能力: 类型.方法 -> 引用了什么`）、所有一律拒绝的标记，以及版本哈希。修改清单直到 `declared` 覆盖 `detected` 且没有一律拒绝的标记。如果某条发现出乎意料，方法名告诉你该看哪里；大多数 `reflection-external` 发现改用 `typeof(...)` 就能消除。
+打开控制台（F8），运行 `mod-scan <你的模组ID>`（任何已列出的模组，启用与否均可）或 `mod-scan <文件夹路径>`。它会打印所列程序集、文件夹中未列出的 DLL、扫描了多少方法、清单声明的能力（`declared`）、扫描器检测到的能力（`detected`）、每条发现（格式为 `能力: 类型.方法 -> 引用了什么`）、所有一律拒绝的标记、某个 DLL 无法读取时的 `ERROR:` 行，以及一行 `fingerprint:`，即这个确切版本的哈希，批准记录和开发者名单引用的就是它。修改清单直到 `declared` 覆盖 `detected` 且没有一律拒绝的标记。如果某条发现出乎意料，方法名告诉你该看哪里；大多数 `reflection-external` 发现改用 `typeof(...)` 就能消除。
+
+像玩家一样测试时还有两个有用的命令：`mod-trust` 列出这台电脑上记录的批准（哈希、能力、开发者模式，创意工坊模组还有物品和发布者 id）以及本次会话中每个模组的信任状态；`mod-trust-list` 显示开发者远程名单的状态。F8 控制台是 Quantum Console：`user-commands` 列出游戏自己的命令（`loot-list`、`mod-scan` 等），`all-commands` 列出全部命令，包括引擎级的。
+
+**发布前**过一遍这份清单：`mod-scan` 无问题、`<Capabilities>` 不多于实际需要、每个 DLL 都列在 `<Assemblies>` 中、没有捆绑游戏已经附带的库、`<ModVersion>` 已递增。玩家的批准记录了你文件的哈希：不新增能力的更新继续加载，新增能力的更新要等每位玩家重新审核，所以请在首次发布前而不是之后决定好你的能力。
 
 ### 玩家看到什么
 
-- **启用**一个 `<Capabilities>` 为空的模组直接生效。声明了能力的模组会向玩家显示确认框，用通俗的话列出这些能力（"访问互联网"、"启动其他程序或打开链接"等），并提醒这样的模组能做玩家能做的任何事。被拒绝的模组会显示原因。
+- **启用**一个 `<Capabilities>` 为空的模组直接生效。声明了能力的模组会向玩家显示确认框，用通俗的话列出这些能力（"访问互联网"、"启动其他程序或打开链接"等），并提醒这样的模组能做玩家能做的任何事；被开发者列入验证名单的版本会跳过这个确认框。被拒绝的模组会显示原因。
 - 详情面板显示你的能力和批准状态：在某日批准、已更新但无新增能力、已由开发者验证，或者未加载的原因。
 - **更新**：文件完全一致则加载。文件变化但没有新增能力也会加载，面板会注明已更新。文件变化且新增了能力，或新版本未通过扫描，则不会加载；该行显示警告，面板提供**审核并启用**按钮，重新执行启用检查。请在首次发布前规划好能力：之后再新增会打断每一位玩家。
 - **停用**会撤回批准；下次启用会重新经过检查。
-- 在远程**封禁名单**上的模组无法启用，正在运行它的机器上也会被关闭，并显示原因。紧急情况下，开发者可以暂停全部模组加载直到修复发布；"模组"菜单会说明。
+- 在远程**封禁名单**上的模组无法启用，在已启用它的机器上会在下次启动时被关闭，并显示原因（正在运行的副本会一直运行到那次重启）。紧急情况下，开发者可以暂停全部模组加载直到修复发布；"模组"菜单会说明，面板会显示"未加载：模组加载已被开发者暂停"。
 - 第一次打开"模组"菜单时，游戏仍会告诉玩家模组可能包含代码。
 
 ### 开发者模式
 
-在本地（`Mods/` 中）开发模组时，每次重新编译都会改变哈希。模组启用过一次之后，本地模组的详情面板会出现**开发者模式**按钮：打开后，该文件夹的每次变化在启动时都被信任，无论扫描结果如何（控制台仍会记录扫描发现）。它按模组、按电脑生效，默认关闭。创意工坊副本永远没有它。
+在本地（`Mods/` 中）开发模组时，每次重新编译都会改变哈希。模组启用过一次之后，本地模组的详情面板会出现**开发者模式**按钮：打开后，该文件夹的每次重新编译都会在启动时直接加载而无需重新批准，即使新版本用到了你尚未声明的能力（只有扫描器直接拒绝时控制台才会警告）。它不覆盖两件事：文件夹中 `<Assemblies>` 未列出的 DLL 仍然会阻止模组加载；下一次**启用**或**审核并启用**仍然按完整规则检查，所以发布前请运行 `mod-scan`。它按模组、按电脑生效，默认关闭。创意工坊副本永远没有它；接管已订阅物品 id 的本地文件夹必须先以本地模组的身份批准一次，按钮才会出现。
 
 ### 不声明能力也能读写文件
 
@@ -1263,7 +1290,7 @@ string folder = ModHelper.GetModDataFolder("my_mod_id");                      //
 - "模组"菜单显示该物品的创意工坊预览图（即你上传的 `previewfile`，见下文）。物品文件夹中的 `preview.png` 只在 Steam 没有预览图或离线时使用。没有任何图片的模组不显示横幅。
 - "模组"菜单中的**取消订阅所选**会移除一个创意工坊模组：它的行会立即消失并被停用，Steam 会删除其文件。如果它正在运行，会一直运行到游戏重启。"激活"旁边的 Steam 按钮会打开该物品的创意工坊页面（在 Steam 游戏内界面中打开；如果关闭了游戏内界面，则在浏览器中打开）。
 - 游戏启动时已订阅但尚未下载的物品会在后台下载；"模组"菜单会显示还有多少个正在下载，它们会在下次重启后出现。
-- 如果 `Mods/` 中的本地文件夹与某个已订阅物品有相同的 `<ID>`，将使用本地副本并忽略创意工坊副本。这就是你在不取消订阅的情况下测试自己模组新版本的方式。"模组"菜单会在该本地模组上注明这一点，它的 Steam 按钮和"取消订阅"作用于该创意工坊物品（取消订阅后本地副本保留）。
+- 如果 `Mods/` 中的本地文件夹与某个已订阅物品有相同的 `<ID>`，将使用本地副本并忽略创意工坊副本。第一次用本地副本启动时，它会显示为"未加载：自你批准后已更改（它现在来自与已批准副本不同的地方）"：点一次**审核并启用**，之后它的**开发者模式**按钮才会出现。这就是你在不取消订阅的情况下测试自己模组新版本的方式。"模组"菜单会在该本地模组上注明这一点，它的 Steam 按钮和"取消订阅"作用于该创意工坊物品（取消订阅后本地副本保留）。
 - 第一次打开"模组"菜单时，游戏会提醒玩家模组可能包含代码。请记住这一点：一个行为不端的模组会损害所有模组作者的声誉。
 
 创意工坊仅在正式版游戏上可用，试玩版没有。
@@ -1312,6 +1339,8 @@ Harmony 是一个运行时修补库，让你能在游戏中任意方法之前、
 ### 补丁会自动应用
 
 你不需要自己调用 `Harmony.PatchAll()`。游戏会扫描每个已加载的模组程序集，并应用它找到的每个 `[HarmonyPatch]` 类。只要声明补丁类（见下文），模组一启用它们就会生效。
+
+> ⚠️ **模组扫描器如何看待补丁。** 修补游戏代码不需要声明任何能力。玩家启用模组时有三种情况会被直接拒绝：针对加载器或信任代码（`ModLoader`、`ModTrust*`、`ModFingerprint`、`ModScanner`、`ModCapability`、`ModSecurityDebug`）的补丁；传入字面 `null` id 调用的 `Harmony.UnpatchAll()`（它会移除所有模组的补丁）；以及自带 `0Harmony.dll`。请使用游戏自带的副本。应用你补丁的 `Harmony` 实例由加载器持有（`ModLoader.Mods.Find(m => m.Manifest.ID == "my_mod_id").HarmonyInstance`，id 为 `"mod.my_mod_id"`）；如果你为手动应用的补丁创建了自己的实例，请用它自己的 id 撤销，绝不要不带 id。通过 `AccessTools` 或反射触及 Unity、.NET 或 Harmony 内部，或者在运行时用字符串拼出类型和成员名，都算作 `reflection-external` 能力；`typeof(游戏类型)` 和游戏类型的字面名称是免费的。详情见[能力声明与扫描器](#能力声明与扫描器)。
 
 ### Postfix：在原方法之后运行
 
@@ -1398,10 +1427,14 @@ public static class TweakClient
 
 | 症状 | 可能原因 |
 |---|---|
-| 模组没有出现在模组菜单中 | 模组根文件夹中没有 `manifest.xml`，或者它的 `<ID>` 为空（查找 `[ModLoader]` 警告），或者文件夹中没有含 `IMod` 实现类的 DLL（查找 `[你的模组名] Error: ...`）。这些情况下加载器都会跳过该文件夹。 |
+| 模组没有出现在模组菜单中 | 清单缺失或无效，加载器跳过了该文件夹：模组根目录没有 `manifest.xml`，`<ID>` 为空或无效（只允许字母、数字、`_`、`-`、`.`），缺少 `<Assemblies>` 或 `<Capabilities>` 元素，`<Assemblies>` 下没有 `<Assembly>`，程序集路径是绝对路径、含有 `..` 或不以 `.dll` 结尾，能力名称未知（这些都记录为 `[ModLoader] ...`），或者所列 DLL 不存在、所列 DLL 中没有实现 `IMod` 的类（记录为 `[你的模组名] Error: ...`）。启动日志会指出确切问题。 |
 | 模组出现了但什么都没发生 | 模组没有启用，或者启用后没有重启。**启用、禁用和重新排序都要到下次启动才生效。** |
-| 控制台中出现 `[你的模组名] Error: ...`，模组菜单中你的模组旁有警告图标 | 你的 DLL 加载失败（缺少它引用的库，或目标框架不对），或者 `Init`、`OnEnable` 或某个 Harmony 补丁抛出了异常。这一行写明了异常，后面紧跟完整的堆栈跟踪。`Mods/` 文件夹中的模组加载失败时，控制台会在启动时自动打开（创意工坊模组只显示警告图标）。该模组仍留在已启用列表中，方便你停用它。 |
-| 代码改动没有生效 | 你复制的是旧 DLL。重新构建（`dotnet build -c Release`）并把 `bin/Release/netstandard2.1/` 中新鲜的 DLL 复制到模组文件夹。 |
+| 模组已启用，但显示警告图标和"未加载：……" | 这次启动信任检查没有放行它。*尚未在这台电脑上批准*：选中它并点击**审核并启用**。*自你批准后已更改（原因）*：你的文件以需要重新批准的方式变化了；原因是以下之一："新版本需要新的能力"、"新版本使用了未声明的能力"、"新版本被模组扫描器拒绝"、"文件夹中包含清单未列出的 DLL"、"它现在来自与已批准副本不同的地方"或"它是另一个创意工坊物品"（本地副本与订阅之间切换）、"无法检查它的文件"（DLL 被你的编译或杀毒软件锁定）。按提示修正，再**审核并启用**。*已被开发者封禁*：该版本在远程封禁名单上。*模组加载已被开发者暂停*：面向所有人的紧急暂停，你这边无需做任何事。开发本地模组时，在详情面板打开**开发者模式**，重新编译就无需这一步。 |
+| 启用被拒绝：使用了清单未声明的能力（"uses capabilities its manifest does not declare"） | 在 F8 控制台运行 `mod-scan <id>`：每条发现都指出方法和它触及的 API。要么在 `<Capabilities>` 中声明该能力，要么改用无需能力的替代方案（见[声明能力](#声明能力)中的表格）。大多数 `reflection-external` 发现改用 `typeof(游戏类型)` 代替字符串就能消除。 |
+| 启用被拒绝：被模组扫描器拒绝（"refused by the mod scanner"），或文件夹中有清单未列出的 DLL（"DLLs in its folder that its manifest does not list"） | 一律拒绝的情况：文件夹中有未列出的 DLL，或引用了既不是游戏的也未列出的程序集；嵌入了可执行文件或加密资源；可疑的字符串常量；传入 `null` id 的 `UnpatchAll()`；针对加载器的补丁；或自带 `0Harmony`。`mod-scan` 会指出是哪一条。见[一律拒绝的情况](#一律拒绝的情况)。 |
+| 控制台中出现 `[你的模组名] Error: ...`，模组菜单中你的模组旁有警告图标 | 你的 DLL 加载失败（缺少它引用的库，或目标框架不对），某个 DLL 使用了游戏程序集的名字，或者 `Init`、`OnEnable` 或某个 Harmony 补丁抛出了异常。这一行写明了异常，后面紧跟完整的堆栈跟踪。`Mods/` 文件夹中的模组加载失败时，控制台会在启动时自动打开（创意工坊模组只显示警告图标）。该模组仍留在已启用列表中，方便你停用它。 |
+| 代码改动没有生效 | 你复制的是旧 DLL。重新构建（`dotnet build -c Release`）；用 `create-mod.bat` 创建的项目会自动安装到 `Mods\`，否则把 `bin/Release/netstandard2.1/` 中新鲜的 DLL 复制到模组文件夹。然后看一下模组菜单：重新编译会改变哈希，没有打开**开发者模式**时模组可能在等待**审核并启用**。 |
+| 我捆绑的库被拒绝，或迫使我声明能力 | 你附带的每个 DLL 都必须列在 `<Assemblies>` 中，并且会像你的代码一样被扫描。游戏已经附带的库（`0Harmony`、`Newtonsoft.Json`、Unity 程序集）完全不能捆绑；请引用游戏的副本。其他在内部使用 `Reflection.Emit` 或反射的库，会让这些能力变成你需要声明的能力。 |
 | 物品显示"未知"占位精灵图 | 传给 `SetSpriteAndShapeFromMod` 的 `spriteKey` 或模组 ID 不匹配。键是**文件名**（不含扩展名和文件夹）；ID 是你清单中的 `<ID>`，**不是**文件夹名。检查控制台中的 `item sprite(s) loaded` 数量。 |
 | 某个精灵图文件被完全忽略 | 它没有*直接*放在 `Textures/Items/` 下（子文件夹不会被扫描），或者它不是 `.png`/`.jpg`。 |
 | `PlaySound` 返回 false / 警告 `Audio identifier ... was not found` | 模组 ID 或声音键不匹配。完整标识是 `<清单 ID>:<不含扩展名的文件名>`。检查控制台中的 `sound(s) loaded` 数量。声音也会在启动后几帧才加载完成（如果播放得很早，请[等待它们](#如何知道资源已就绪)）。 |

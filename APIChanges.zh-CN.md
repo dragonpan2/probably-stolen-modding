@@ -8,7 +8,7 @@ English version: [APIChanges.md](APIChanges.md)
 
 **建议处理**
 
-- **`manifest.xml` 需要 `<Assemblies>` 和 `<Capabilities>`。** 两者缺一的清单不会被列出。在 `<Assemblies>` 下列出每个要加载的 DLL（文件夹中其他 DLL 一律忽略，与游戏或框架程序集同名的 DLL 会被拒绝），在 `<Capabilities>` 下声明你的代码在游戏 API 之外做了什么：`files`、`network`、`process`、`dynamic-code`、`native`、`reflection-external`。这个元素通常为空。玩家启用你的模组时，游戏会扫描你的 DLL：未声明的能力会导致启用被拒绝，已声明的能力会在玩家确认前展示给玩家。用控制台命令 `mod-scan <id>` 自查。[详情](ModdingGuide.zh-CN.md#能力声明与扫描器)
+- **`manifest.xml` 需要 `<Assemblies>` 和 `<Capabilities>`。** 两者缺一的清单不会被列出。在 `<Assemblies>` 下列出每个要加载的 DLL（文件夹中的其他任何 DLL 都会导致启用被拒绝，与游戏或框架程序集同名的 DLL 同样会被拒绝），在 `<Capabilities>` 下声明你的代码在游戏 API 之外做了什么：`files`、`network`、`process`、`dynamic-code`、`native`、`reflection-external`。这个元素通常为空。玩家启用你的模组时，游戏会扫描你的 DLL：未声明的能力会导致启用被拒绝，已声明的能力会在玩家确认前展示给玩家。用控制台命令 `mod-scan <id>` 自查。[详情](ModdingGuide.zh-CN.md#能力声明与扫描器)
 - **批准按电脑、按版本记录。** 玩家点击"启用"时会记录你文件的哈希。不新增能力的更新继续运行；新增能力的更新会等待玩家重新审核。在本地迭代模组时，请在"模组"菜单中打开**开发者模式**，这样你的每次重新编译都被信任。[详情](ModdingGuide.zh-CN.md#玩家看到什么)
 - **每个模组都需要一个含 `IMod` 类的 DLL。** 只有资源的文件夹（没有 DLL，或没有实现 `IMod` 的 DLL）不再出现在"模组"菜单中，控制台会改为记录 `[你的模组名] Error: ...`。只含资源的模组请附带一个最简单的 `IMod` 类。[详情](ModdingGuide.zh-CN.md#模组资源)
 - **不要再为修改掉落而修补 `TableMaster` / `TableGroupMaster`。** 它们的静态字典已被移除；掷取（roll）现在都经过 `LootRegistry`，它为此提供了受支持的 API。[详情](ModdingGuide.zh-CN.md#掉落表)
@@ -16,7 +16,7 @@ English version: [APIChanges.md](APIChanges.md)
 **新增**
 
 - **无需 `files` 能力的文件访问。** `ModHelper.ReadModFileText / ReadModFileBytes / ModFileExists / GetModFolder` 读取你的模组文件夹；`GetModDataFolder`、`ReadModDataFileText / Bytes`、`WriteModDataFileText / Bytes`、`DeleteModDataFile`、`ListModDataFiles` 读写存档位置下每个模组专属的文件夹。只接受相对路径。用它们代替 `System.IO`，就无需声明任何能力。[详情](ModdingGuide.zh-CN.md#不声明能力也能读写文件)
-- **控制台命令** `mod-scan <id 或文件夹>`（扫描器在你的 DLL 中发现了什么，以及版本哈希）、`mod-trust [id]`（这台电脑上的批准记录）和 `mod-trust-list`（远程名单状态）。[详情](ModdingGuide.zh-CN.md#发布前自查)
+- **控制台命令** `mod-scan <id 或文件夹>`（扫描器在你的 DLL 中发现了什么，以及该版本的 fingerprint 哈希）、`mod-trust [id]`（这台电脑上的批准记录）和 `mod-trust-list`（远程名单状态）。[详情](ModdingGuide.zh-CN.md#发布前自查)
 - **难度成为数据。** 现在有四个难度（cozy、normal、hard、challenge），`ModHelper.AddDifficulty(modId, id, order, title, subtitle, configure, basedOn, notes, iconKey)` 可添加你自己的难度：一组游戏直接读取的 `DifficultyRules` 数值，在选择界面按顺序列出，并根据与普通难度不同的规则生成说明。`ModifyDifficulty(id, modify)` 调整任意难度，`RemoveDifficulties(modId)` 移除你的难度，`GetDifficultyId()` / `GetDifficultyRules()` / `IsDifficultyAtLeast(id)` 读取当前难度，一局开始或载入时触发 `ModHook.OnDifficultyApplied(id)`。`PlayerStore.IsHardMode()` 现在表示困难或更高。[详情](ModdingGuide.zh-CN.md#难度)
 - **你自己的起始天赋。** `ModHelper.AddStartingPerk(modId, id, cost, type, name, description, iconKey, incompatiblePerks, extraPerkSlots, mindEditable)` 把一个天赋与原版天赋一起列在新游戏的天赋界面上；选择随本局存档保存，你的模组通过 `IsStartingPerkActive(id)` / `GetStartingPerkIds()` 读取后自行施加效果。`RemoveStartingPerks(modId)` 可再移除。[详情](ModdingGuide.zh-CN.md#起始天赋)
 - **你自己的起始方案。** `ModHelper.AddStartingScenario(modId, id, title, description, startWith, onStart, iconKey, tag, tagTone, skipIntro, comingSoon)` 把一个专精加进新游戏界面的图标栏；`onStart` 在新的一局开始时放置初始物品。`RemoveStartingScenarios(modId)` 可再移除，`GetStartingScenarioId()` / `IsStartingScenario(id)` 可得知本局以哪个方案开始，每局新游戏都会触发 `ModHook.OnNewGameStarted(id)`。[详情](ModdingGuide.zh-CN.md#起始方案)

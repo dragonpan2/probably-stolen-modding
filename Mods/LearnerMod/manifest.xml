@@ -6,7 +6,7 @@
   <ModVersion>1.0</ModVersion>
   <Description>An example mod for demonstration purposes.</Description>
   <GameVersions>
-    <Version>047</Version>
+    <Version>0.46</Version>
   </GameVersions>
   <Prerequisites />
   <Assemblies>
