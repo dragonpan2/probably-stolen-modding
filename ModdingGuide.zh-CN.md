@@ -49,6 +49,7 @@ English version: [ModdingGuide.md](ModdingGuide.md)
   - [起始天赋](#起始天赋)
   - [难度](#难度)
   - [夜间地点](#夜间地点)
+  - [鉴定物品](#鉴定物品)
   - [模组配置](#模组配置)
   - [能力声明与扫描器](#能力声明与扫描器)
     - [声明能力](#声明能力)
@@ -116,7 +117,7 @@ namespace MyMod
 Probably Stolen 内置了两个在开发和测试模组时必不可少的工具。
 
 - 🐛 **调试控制台（`F8`）**：打开一个显示全部日志输出的控制台，包括 `ModLog`、`Debug.Log`、警告和错误。用它确认模组已加载、观察钩子点触发，以及在出错时阅读堆栈跟踪。你的模组自己的 `Debug.Log` 和 `ModLog` 输出始终显示，模组加载器的输出也一样；游戏本身的信息日志默认隐藏，需在 **F9 > Command > Toggle Verbose Log** 中开启（警告和错误始终显示）。
-- 🛠️ **开发菜单（`F9`）**：打开一个包含许多对模组开发和测试有用的功能的菜单，例如生成物品、触发事件、查看游戏状态。用于复现边缘情况，而不必一路玩到那里。按钮分为五列：Store（商店）、Command（命令）、Spawn（生成）、Special（特殊）和 Modding（模组工具：纸质手册编辑器、重新载入手册、资源查看器；见[纸质手册](#纸质手册)）。
+- 🛠️ **开发菜单（`F9`）**：打开一个包含许多对模组开发和测试有用的功能的菜单，例如生成物品、触发事件、查看游戏状态。用于复现边缘情况，而不必一路玩到那里。主面板分为四列：Store（商店）、Command（命令）、Spawn（生成）和 Special（特殊），上方有一个搜索栏；Special 列还能打开两个独立窗口：Modding Panel（模组工具：纸质手册编辑器、重新载入手册、资源查看器；见[纸质手册](#纸质手册)）和 Marketing Panel。
 
 ### 添加你自己的调试按钮
 
@@ -174,7 +175,7 @@ public void OnDisable()
 - **掉落表编辑**：把你的物品放进游戏的掉落表、修改或移除已有掉落，或者添加全新的表，可通过代码或 JSON 文件完成（[掉落表](#掉落表)）
 - **自定义 UI**：用游戏的控件从代码构建你自己的窗口和面板（设置、查看器、计数器）（[自定义 UI](#自定义-ui)）
 - **纸质手册**：游戏纸张风格的指南、名片和单页，用游戏内编辑器排版并保存为 JSON，附带打开它的物品（[纸质手册](#纸质手册)）
-- **机器窗口**、**游戏选项**、**人脉升级**、**起始方案与天赋**、**难度**、**夜间地点与事件**：下文各有专门小节
+- **机器窗口**、**游戏选项**、**人脉升级**、**起始方案与天赋**、**难度**、**夜间地点与事件**、**鉴定物品**：下文各有专门小节
 - **模组配置与模组数据**：带生成面板的类型化设置、按局保存的键值存储，以及你自己文件夹中的文件（[模组配置](#模组配置)、[保存模组数据](#保存模组数据)）
 
 ### ❌ 不支持
@@ -185,7 +186,7 @@ public void OnDisable()
 - **大修型模组**：一次触及许多系统的大规模重做
 
 - **地下交易所的模组交易**：向地下交易所添加新的交易
-- **特殊物品**：可检视物品和鉴定物品
+- **可检视物品**：没有注册新类型的 API（鉴定物品已有，见[鉴定物品](#鉴定物品)）
 
 不支持的功能可能在以后的更新中得到支持。这个列表中的任何内容仍然可以尝试用 Harmony 补丁实现。请做好每次游戏更新后自行维护的准备，并记住[能力规则](#能力声明与扫描器)：对游戏代码打补丁是免费的，但反射进引擎或系统类型属于需要声明的能力。
 
@@ -305,6 +306,7 @@ Texture2D tex = mod.Textures["banner"];
 | 葡萄牙语（巴西） | `ptBR` |
 | 韩语 | `ko` |
 | 意大利语 | `it` |
+| 波兰语 | `pl` |
 
 （其他名字的文件会被加载但永远不会被解析到。不确定时，用 `ModHelper.GetCurrentLocale().Identifier.Code` 打印当前语言代码。）
 
@@ -441,7 +443,12 @@ void RegisterItems(ModItemDirectory dir)
 | `ModHelper.MoveItemToTrash(item)` | 垃圾桶 |
 | `ModHelper.MoveItemToAfterhours(item)` | 夜间背包（玩家夜出带回的东西） |
 
-`ModHelper.SetItemOwnerShip(item, isOwn)` 把物品标记为玩家的（true）或顾客的（false）并返回它，因此可以链式调用：`ModHelper.MoveItemToFrontCounter(ModHelper.SetItemOwnerShip(ModHelper.SpawnItem("health_pack"), false))`。`ModHelper.SetSource(item, modId, modName)` 以标签（`ModHelper.MOD_ID_TAG` / `MOD_NAME_TAG`）把你的模组 ID 和名称盖在物品上，这样你的代码或其他模组可以通过 `item.GetTagReadonly(ModHelper.MOD_ID_TAG).GetString()` 知道物品来自哪里。游戏本身不读取它们；由你的纸质手册生成的物品自带这些标签，其他物品只有你调用时才有。这些辅助方法需要一局已载入的游戏：主菜单中商店的容器尚不存在，所以在 `Init` 或 `OnEnable` 中调用会抛出 `NullReferenceException`。请在 `OnGameLoadedInit` 之类的钩子里或你自己的 UI 中调用。
+`ModHelper.SetItemOwnerShip(item, isOwn)` 把物品标记为玩家的（true）或顾客的（false）并返回它，因此可以链式调用：`ModHelper.MoveItemToFrontCounter(ModHelper.SetItemOwnerShip(ModHelper.SpawnItem("health_pack"), false))`。`ModHelper.SetSource(item, modId, modName)` 以标签（`ModHelper.MOD_ID_TAG` / `MOD_NAME_TAG`）把你的模组 ID 和名称盖在物品上，这样你的代码或其他模组可以通过 `item.GetTagReadonly(ModHelper.MOD_ID_TAG).GetString()` 知道物品来自哪里。这些辅助方法需要一局已载入的游戏：主菜单中商店的容器尚不存在，所以在 `Init` 或 `OnEnable` 中调用会抛出 `NullReferenceException`。请在 `OnGameLoadedInit` 之类的钩子里或你自己的 UI 中调用。
+
+**玩家能看到你的内容来自哪里。** 你添加的每个物品，其提示框的最后一行是你的模组名（清单中的 `Name`，没有名称时为 `ID`）；你添加的每位顾客，在其第一句台词之前，对话记录器会显示一行"来自你的模组名："。玩家可以在选项中分别关闭这两项。通常你什么都不用做：
+
+- **物品**：通过目录的 `Add` 或 `Set` 注册的物品按其工厂函数识别：工厂函数写在你的模组的任一 DLL 中，物品就算你的，替换原版 id 时也一样。工厂函数位于别处（例如某个共享库模组中）的物品需要调用 `ModHelper.SetSource`，它也优先于工厂函数的判断。由你的纸质手册生成的物品已经带有这些标签。
+- **顾客**：在 `OnGenerateCustomer*` 钩子中加入顾客队列（`manager.AddClient(client)`）的顾客会被标记为你的。以其他方式（其他钩子、Harmony 补丁、你放进游戏随机顾客列表的工厂函数）加入的顾客，请在其走到柜台之前调用 `ModHelper.SetClientSource(client, modId)`。若要在钩子中加入一位原版顾客而不带你的模组名，请调用 `ModHelper.SetClientSource(client, null)`。这一行随顾客的开场对话写入，没有开场对话的顾客不会有这一行。
 
 ### 可用钩子
 
@@ -456,7 +463,7 @@ void RegisterItems(ModItemDirectory dir)
 | `OnGoingSleep*` / `OnWakingUp*` | Early, Late | 玩家入睡 / 醒来 | 无 |
 | `OnLeavingStore*` / `OnReturningStore*` | Early, Late | 玩家离开 / 返回店面 | 无 |
 | `OnHandlingNightlyServices*` | Early, Late | 处理夜间维护 | 无 |
-| `OnPlaceInventorInventoryItem*` | Early, Late | 物品被放入背包 | `List<GameItem>` |
+| `OnPlaceInventorInventoryItem*` | Early, Late | 杰克逊博士（发明家）为一次拜访准备他的售卖货品（Early：在原版货品之前，Late：之后）；用 `PlayerStore.Instance.AddDirectSellingItemToTable(itemId)` 往里添加 | `List<GameItem>`（玩家拥有的物品，货品据此挑选） |
 | `OnCreateTooltip*` / `OnCreateDevTooltip*` | Early, Late | 正在构建物品提示框（追加你自己的行） | `RichTextBuilder`, `GameItem` |
 | `OnModAssetsLoaded` | 无 | 某个模组的资源（贴图、物品精灵图、声音、本地化）全部加载完成（每个已启用模组触发一次；检查是不是你的模组） | `LoadedMod` |
 | `OnLootTablesLoaded` | 无 | 掉落表已加载且所有模组编辑已应用（每次场景加载一次） | 无 |
@@ -672,9 +679,9 @@ CustomUIManager.Window("my_mod_id.settings", "My Mod Settings", CustomUIManager.
 ```
 
 - `CustomUIManager.Window(id, title, layer)` 开始一个窗口，并替换任何同 ID 的已有窗口。请给 ID 加上你的模组 ID 前缀，以避免与其他模组冲突。`Show()` 结束链式调用并返回一个 `CustomUIWindow`；`GetWindow()` 则以隐藏状态返回它。
-- 控件：`AddLabel`、`AddButton`、`AddImage`、`AddToggle`、`AddSlider`、`AddInput`、`AddDropdown`、`AddProgressBar`、`AddSpace`、`AddFlexibleSpace`。给任何之后想更新的控件传一个 `id`。`AddInput` 的 `onChanged` 在回车或失去焦点时触发；传 `onTyping` 可获得逐字回调。要实时筛选列表，不要在该回调里重建窗口（会让输入框失去焦点）：在创建列表容器的 `Begin` 调用之后读取 `builder.CurrentContainer`，之后用 `CustomUIBuilder.ClearContainer(host)` 清空，再用 `new CustomUIBuilder(CustomUIManager.Instance, window, host)` 重新填充。
-- 布局：`BeginRow` / `BeginColumn` / `BeginGrid(columns, cellWidth, cellHeight)` / `BeginScroll(height)`，每个都用 `End()` 结束。`BeginRow(spacing, alignment)` 和 `BeginColumn(spacing, alignment)` 可传入 `TextAnchor` 来对齐子元素（默认 `UpperLeft`；`UpperCenter` 可让图标居中于其标签上方）。标签页：`BeginTabs()`，然后每个标签页一组 `BeginTab("Name") ... End()`，最后 `EndTabs()`。
-- 窗口选项：`SetSize`、`SetPosition`、`Center`、`SetDraggable`、`SetCloseOnEscape`、`OnClose(callback)`。`WithTooltip(text)` 给最后添加的元素附加一个悬停提示。
+- 控件：`AddLabel`、`AddHeader`、`AddWarning`、`AddSeparator`、`AddButton`、`AddCloseButton`、`AddIconButton(sprite, size, onClick)`、`AddImage`、`AddToggle`、`AddSlider`、`AddInput`、`AddDropdown`、`AddProgressBar`、`AddSpace`、`AddFlexibleSpace`。给任何之后想更新的控件传一个 `id`。`AddInput` 的 `onChanged` 在回车或失去焦点时触发；传 `onTyping` 可获得逐字回调。要实时筛选列表，不要在该回调里重建窗口（会让输入框失去焦点）：在创建列表容器的 `Begin` 调用之后读取 `builder.CurrentContainer`，之后用 `CustomUIBuilder.ClearContainer(host)` 清空，再用 `new CustomUIBuilder(CustomUIManager.Instance, window, host)` 重新填充。
+- 布局：`BeginRow` / `BeginColumn` / `BeginPanel(width, height)`（带边框的方框）/ `BeginGrid(columns, cellWidth, cellHeight)` / `BeginScroll(height)` / `BeginScrollFlexible(minHeight)`（占用定高容器中剩余的高度），每个都用 `End()` 结束。`BeginRow(spacing, alignment)` 和 `BeginColumn(spacing, alignment)` 可传入 `TextAnchor` 来对齐子元素（默认 `UpperLeft`；`UpperCenter` 可让图标居中于其标签上方）。标签页：`BeginTabs()`，然后每个标签页一组 `BeginTab("Name") ... End()`，最后 `EndTabs()`。
+- 窗口选项：`SetSize`、`SetPosition`、`Center`、`SetDraggable`、`SetCloseOnEscape`、`OnClose(callback)`。`WithTooltip(text)` 给最后添加的元素附加一个悬停提示。外观：场景图层用游戏内控件，meta 和 menu 图层用深色选项外观，自动选择（`UseMetaPrefabs` 强制后者）；在构建器上调用 `UseMachineryStyle()`，或 `CustomUIManager.Instance.CreateWindow(id, title, layer, null, CustomUIManager.Style.Machinery)`，可让窗口使用机器内容窗口的 Machinery 外观。
 - 层（layer）决定由哪个画布承载窗口：游戏场景中的 `LAYER_PAPER`（书籍和文档，大多数普通 UI）、`LAYER_FRONT`、`LAYER_REAR`、`LAYER_META`（选项和退出菜单），主菜单中的 `LAYER_MENU`，以及 `LAYER_OVERLAY`，即管理器自己的、跨场景保留的画布。场景层上的窗口会随场景销毁，所以需要时请重建它们，例如在 `ModHook.OnGameLoadedNormal` 中。指向当前场景中不存在的层时会回退到覆盖层并给出警告。
 
 之后通过句柄更新窗口：
@@ -704,7 +711,7 @@ window.Hide(); window.Show(); window.Close(); // Close 会销毁并注销窗口
 ### 用编辑器制作手册
 
 1. 启用你的模组启动游戏（`Mods/` 下一个带 `manifest.xml` 和 DLL 的本地文件夹），然后载入一个存档：纸质手册只存在于商店场景。
-2. 按 `F9`，在 **Modding** 列点击 **Paper Editor**。在 **Book** 标签页的 *New book* 下选择你的模组，输入一个 ID（字母、数字、下划线），选一个起点（空白笔记本、鉴定指南、教程单页或名片），如果想用自己的美术，从模组的 `Textures/Paper/` 中选一张背景。**Create and edit** 会写入 `Mods/<你的模组>/Books/<id>.json` 并打开它。
+2. 按 `F9`，在 Special 列打开 **Modding Panel**，再点击 **Paper Editor**。在 **Book** 标签页的 *New book* 下选择你的模组，输入一个 ID（字母、数字、下划线），选一个起点（空白笔记本、鉴定指南、教程单页或名片），如果想用自己的美术，从模组的 `Textures/Paper/` 中选一张背景。**Create and edit** 会写入 `Mods/<你的模组>/Books/<id>.json` 并打开它。
 3. 搭建页面。**Palette** 可以添加各种原版文字样式的文本、来自任意精灵图的图片（选择器列出原版纸张美术和你自己的）、文字按钮和图标按钮、把子元素纵向堆叠的流式区域（flow），以及外框部件。在手册本身上：点击选中，拖动移动，角和边的把手调整大小，在空白纸面上拖动框选，Shift 追加选择，方向键微调（Shift 为 10），Alt 拖动移动整个面板。元素会吸附到网格、其他元素的边和中心以及页面中心（按住 Ctrl 跳过吸附）。**Inspector** 编辑选中元素的字段；**Elements** 按绘制顺序列出元素并提供锁定和可见开关；**Tools** 有对齐、分布、统一尺寸、层级、撤销与重做、缩放、语言预览和快捷键列表。
 4. 每次修改都会在一秒内保存到 JSON 文件，面板立即更新。用文本编辑器修改文件也一样：游戏会检测到变化并重建已打开的手册。**Check** 标签页列出问题（缺失的精灵图、溢出的文字、重复的 ID……），**Screenshot page** 在文件旁保存一张 PNG，可作为创意工坊预览图。
 5. **Pages** 添加和重排页面，并管理模板：一种带命名槽位（slot）的共享布局，每一页填入自己的内容（标题、正文、一张插图）。起点自带原版指南、教程单页和名片的布局作为内置模板；*Create from the selected page elements* 可以创建你自己的模板。
@@ -795,9 +802,9 @@ PaperUI ui = ModHelper.CreatePaper("my_mod_id", "recipes", "notebook_manual")
 
 ### 原版美术与你自己的美术
 
-精灵图选择器以及 `background` / `sprite` 键接受原版纸质面板使用的所有精灵图，按精灵图名称：背景（`notebook_manual`、`guide_reworked`、`guide`、`tutorial_sheet`、`business_card_template`、`exchange`、`test_strips`、`mentors_notes`……）、外框按钮（`paper_buttons_close1`、`paper_buttons_screen_0`、`paper_buttons_l_1`、`paper_buttons1`、`blue_button_2x`）、指南页眉（`guide_logo`）以及原版指南的插图。**F9 > Modding > Paper Sprite Picker** 可以浏览它们并复制键。你自己的美术放在模组的 `Textures/Paper/` 中（PNG 或 JPG，作为平滑的 UI 精灵图载入），按文件名引用，或在其他模组的手册中用 `"my_mod_id:name"` 引用。`Textures/Items/` 中的物品精灵图也可以用。另外两类：原版物品精灵图写作 `图集/名称`（`items_aquaculture/tilapia_large1`、`items_misc/manual1`；调色板中的 *Item sprite from the game atlases* 按钮会列出它们），以及深色选项界面的外框，写作 `meta_` 加精灵图名称（`meta_panel` 是九宫格底板，也可以用作背景；`meta_seperator`、`meta_checkbox`……），以及按名称引用的开局职业图标（`icons_apprentice`、`icons_aquaculture`……）。
+精灵图选择器以及 `background` / `sprite` 键接受原版纸质面板使用的所有精灵图，按精灵图名称：背景（`notebook_manual`、`guide_reworked`、`guide`、`tutorial_sheet`、`business_card_template`、`exchange`、`test_strips`、`mentors_notes`……）、外框按钮（`paper_buttons_close1`、`paper_buttons_screen_0`、`paper_buttons_l_1`、`paper_buttons1`、`blue_button_2x`）、指南页眉（`guide_logo`）以及原版指南的插图。**F9 > Special > Modding Panel > Paper Sprite Picker** 可以浏览它们并复制键。你自己的美术放在模组的 `Textures/Paper/` 中（PNG 或 JPG，作为平滑的 UI 精灵图载入），按文件名引用，或在其他模组的手册中用 `"my_mod_id:name"` 引用。`Textures/Items/` 中的物品精灵图也可以用。另外两类：原版物品精灵图写作 `图集/名称`（`items_aquaculture/tilapia_large1`、`items_misc/manual1`；调色板中的 *Item sprite from the game atlases* 按钮会列出它们），以及深色选项界面的外框，写作 `meta_` 加精灵图名称（`meta_panel` 是九宫格底板，也可以用作背景；`meta_seperator`、`meta_checkbox`……），以及按名称引用的开局职业图标（`icons_apprentice`、`icons_aquaculture`……）。
 
-控制台命令（F8）：`paper-list`、`paper-open <id>`、`paper-close [id]`、`paper-reload`、`paper-edit [id]`、`paper-item <id>`。F9 的 Modding 列有 **Reload Mod Books**，用于游戏运行中新增或修改的文件。
+控制台命令（F8）：`paper-list`、`paper-open <id>`、`paper-close [id]`、`paper-reload`、`paper-edit [id]`、`paper-item <id>`。F9 的 Modding Panel 有 **Reload Mod Books**，用于游戏运行中新增或修改的文件。
 
 ---
 
@@ -825,10 +832,10 @@ MachineHelper.SetupBatterySlot(battery, item);
 ```
 
 - `MachineHelper.Panel(label, content, role)` 把物品栏（或装着槽位的 `GridPixelElement`）放进标签板下方的凹槽区；其他元素（堆叠、按钮、标签页）原样放入。`PowerPanel` 和 `NotePanel` 使用设计稿的电池和便签图标；`IconPanel(sprite, content, role)` 接受你自己的精灵（`"modId:spriteName"` 键可通过 `CustomUIManager.Instance.GetSprite` 取得）。
-- 控件：`MachineryButton`（文字、图标或两者；`SetDescription` 设置提示；`Enable` / `Disable` / `Hide`）、`MachineryRadioButton`（开关；`MachineryRadioGroup` 保证只有一个开启；`MachineryRadioList(captions, selected, onChanged)` 是带说明文字的一列）、`MachineryProgressBar`（`SetValue(0..1)`、`SetColor`）、`MachinerySlider`（`SetRange(min, max, step)` 或 `SetSteps(n)` 加 `GetInt`；`onChanged`、`onReleased`）、`MachineryTabs`（`AddTab(caption, page)`）、`MachineryText`（单行，支持富文本）。
+- 控件：`MachineryButton`（文字、图标或两者；`SetDescription` 设置提示；`Enable` / `Disable` / `Hide`）、`MachineryRadioButton`（开关；`MachineryRadioGroup` 保证只有一个开启；`MachineryRadioList(captions, selected, onChanged)` 是带说明文字的一列）、`MachineryProgressBar`（`SetValue(0..1)`、`SetColor`）、`MachinerySlider`（`SetRange(min, max, step)` 或 `SetSteps(n)` 加 `GetInt`；`onChanged`、`onReleased`）、`MachineryRangeSlider`（同一轨道上的最小值和最大值双滑块；`SetRange`、`GetLowInt` / `GetHighInt`、`onChanged`、`onReleased`）、`MachineryTabs`（`AddTab(caption, page)`）、`MachineryText`（单行，支持富文本；`WithInfoLink(id, tooltipProvider)` 在文字后追加游戏的信息图标和悬停提示）。
 - 布局：`MachineryStack.Vertical(...)` / `Horizontal(...)` 按间距堆叠元素；竖直堆叠会把按钮、滑块、进度条和文字拉伸到面板宽度。`window.AddHeaderButton(new MachineryButton(icon, callback))` 在关闭叉的左侧加一个按钮。
 - 之后读取机器的物品栏：`MachineHelper.GetBodyStorage(item, i)` 返回窗口主体从左到右第 i 个物品栏或网格（`GetBatterySlot`、`GetModuleInv`、`GetSlot` 都基于它），或者用 `((MachineryPanelRow)window.childElement).GetPanel("role")`。
-- 面板顺序就是物品栏的存档顺序。模组发布后，新面板只能加在末尾，不要调整已有面板的顺序，否则存档里的物品会落到错误的物品栏。
+- 面板顺序就是物品栏的存档顺序。模组发布后，新面板只能加在末尾，不要调整已有面板的顺序，否则存档里的物品会落到错误的物品栏。要让已发布窗口的面板以另一种顺序显示，给 `CreateMachineryWindow(canMove, displayOrder, panels)` 传入 `displayOrder`（`panels` 的下标）：面板按该顺序绘制，存档顺序不变。
 - 经典窗口外观仍可用 `new PixelWindow(canMove)` 获得；Machinery 风格是 `new PixelWindow(canMove, style: WindowStyle.Machinery)`，可挂任何元素（裸物品栏会由窗口自己画出一块面板和凹槽区）。
 
 ---
@@ -873,7 +880,7 @@ public void OnDisable()
 - **标签、提示和下拉选项都是函数**，每次窗口打开时重新求值，所以 `() => ModHelper.GetLocalized(...)` 能跟随语言切换。提供 tooltip 会在标签旁加一个信息图标。
 - **ID 有命名空间。** `optionId` 和你自己的分区 ID 在内部都会加上模组 ID 前缀，因此不会与其他模组冲突。重复注册同一个 ID 会替换之前的条目。`RemoveGameOption(modId, optionId)` 和 `RemoveGameOptions(modId)` 可以再移除它们。`ModHelper.GameOptionId(modId, optionId)` 返回游戏内部使用的带前缀 id（`"modId:optionId"`），用于极少数需要按完整 id 匹配条目的场合。
 - **顺序**为分区内的注册顺序；你的分区排在内置分区之后。
-- **按键绑定**会拒绝 Escape、数字键以及窗口中其他绑定行已占用的按键，且只能捕获键盘按键。玩家选择按键期间，游戏自己的快捷键保持静默；你的也应如此：`KeyBindHelper.SuppressHotkeys` 为 true 时跳过轮询。
+- **按键绑定**会拒绝 Escape 以及窗口中其他绑定行已占用的按键（数字键仍可绑定），且只能捕获键盘按键。玩家选择按键期间，游戏自己的快捷键保持静默；你的也应如此：`KeyBindHelper.SuppressHotkeys` 为 true 时跳过轮询。
 - 可在 `OnEnable` 中调用；窗口每次打开都会重新构建。
 
 只有当某个设置确实属于游戏自身的选项时才使用它。关于你模组本身的设置请放进模组自己的配置面板，见下文。
@@ -1132,7 +1139,51 @@ public void OnDisable()
 - **`isAvailable`** 返回假时卡片变灰并显示"不可用"，不能前往；`isDiscovered` 返回假时则不显示。两者在每次打开界面时都会询问。
 - **我在哪里。** `ModHelper.IsOutsideStore()` 和 `GetCurrentAfterhourLocationId()`；`GetAfterhourLocation(id)` 返回任意地点（原版或模组）的定义，未知 id 返回 null；钩子 `ModHook.OnAfterhourArriveEarly / Late` 和 `OnAfterhourLeaveEarly / Late` 对每个地点（包括原版的 `AfterhourLocation.DUMPING_GROUND`、`COMMISSARY`、`DR_JACKSON`）都会带着地点 ID 触发。
 - **状态。** `GetAfterhourVisits(id)`、`GetAfterhourCounter(id, key)` / `SetAfterhourCounter(id, key, value)` 随本局存档保存在地点 ID 名下。
-- **事件。** 一个地点上可以同时运行多个事件。带 `dailyChancePercent` 的 `AddAfterhourEvent` 会在它尚未运行时于每天开始自动开始（用 `maxConcurrentEvents` 限制地点上的数量），带 `weekdays`（`AfterhourWeekday.Wednesday`……）的则在空间站一周的那些日子开始（第 1 天是周一；有计划事件开始的那天不会出现随机事件）；`closesLocation: true` 会让地点在事件进行期间不可用（卡片变灰、不能前往，事件仍会列出）；`StartAfterhourEvent(eventId, days)` 从代码添加一个（已在运行的则延长），`EndAfterhourEvent(eventId)` 结束一个，`EndAllAfterhourEvents(locationId)` 结束全部；`IsAfterhourEventActive(eventId)`、`GetActiveAfterhourEventIds(locationId)` 和 `GetAfterhourModifier(locationId, key)`（所有进行中事件之和）读取它们；你自己的机制读取你自己的修正值名称。原版修正值都是在游戏已有几率基础上的相对百分比（效果行写作"几率提高 / 降低 X%"）：垃圾场读取 `injury_chance`（缩放两种受伤几率）、`junk_chance`（缩放战利品掷骰中垃圾表的权重，负值表示更少垃圾）和 `loot_double_chance`（加到扫描仪双倍战利品几率上的百分点）；另有两个不是几率：`injury_immunity`（大于 0 时完全不会受伤）和 `scav_attempts`（每晚固定增加的搜刮次数）。杰克逊博士处读取 `inventor_sell_price`（他店内售价的相对变化），配给站读取 `commissary_restock_percent_of_max`（每天开始时按每件物品最大库存的百分比补货）。原版事件（`fresh_dump`、`georgio_assistance`、`special_stock`、`jackson_discount`、`commissary_burglary`、`fresh_restock`）就使用它们。卡片上的标题在所有效果都有利时为绿色，都不利时为红色，混合时为橙色（传入 `tone` 可强制指定）；剩余天数显示在描述之后。`ModHook.OnAfterhourEventStarted / Ended` 带着地点 ID 和事件 ID 触发。F9 控制台的 `afterhour-events`、`afterhour-event-start` 和 `afterhour-event-end` 可用于测试。
+- **事件。** 一个地点上可以同时运行多个事件。带 `dailyChancePercent` 的 `AddAfterhourEvent` 会在它尚未运行时于每天开始自动开始（用 `maxConcurrentEvents` 限制地点上的数量），带 `weekdays`（`AfterhourWeekday.Wednesday`……）的则在空间站一周的那些日子开始（第 1 天是周一；有计划事件开始的那天不会出现随机事件）；`closesLocation: true` 会让地点在事件进行期间不可用（卡片变灰、不能前往，事件仍会列出）；`StartAfterhourEvent(eventId, days)` 从代码添加一个（已在运行的则延长），`EndAfterhourEvent(eventId)` 结束一个，`EndAllAfterhourEvents(locationId)` 结束全部；`IsAfterhourEventActive(eventId)`、`GetActiveAfterhourEventIds(locationId)` 和 `GetAfterhourModifier(locationId, key)`（所有进行中事件之和）读取它们；你自己的机制读取你自己的修正值名称。原版修正值都是在游戏已有几率基础上的相对百分比（效果行写作"几率提高 / 降低 X%"）：垃圾场读取 `injury_chance`（缩放两种受伤几率）、`junk_chance`（缩放战利品掷骰中垃圾表的权重，负值表示更少垃圾）和 `loot_double_chance`（加到扫描仪双倍战利品几率上的百分点）；另有两个不是几率：`injury_immunity`（大于 0 时完全不会受伤）和 `scav_attempts`（每晚固定增加的搜刮次数）。杰克逊博士处读取 `inventor_sell_price`（他店内售价的相对变化），配给站读取 `commissary_restock_percent_of_max`（每天开始时按每件物品最大库存的百分比补货）。原版事件（`fresh_dump`、`georgio_assistance`、`special_stock`、`jackson_discount`、`jackson_closed`、`commissary_burglary`、`fresh_restock`）就使用它们。卡片上的标题在所有效果都有利时为绿色，都不利时为红色，混合时为橙色（传入 `tone` 可强制指定）；剩余天数显示在描述之后。`ModHook.OnAfterhourEventStarted / Ended` 带着地点 ID 和事件 ID 触发。F9 控制台的 `afterhour-events`、`afterhour-event-start` 和 `afterhour-event-end` 可用于测试。
+
+---
+
+## 鉴定物品
+
+鉴定顾客会带来需要玩家估价的物品：义肢手、包装排骨三明治和等离子燃料罐。每种类型在鉴定师委员会的某个等级解锁。一位顾客会带来同一类型的 2 到 4 件物品，类型从玩家已解锁且未屏蔽的类型中等概率选出（屏蔽在证书的"使用"窗口中进行）。你的模组可以添加类型，或把原版类型移到另一个等级。
+
+```csharp
+private const string WATCH_VALUE_INT = "MY_MOD_WATCH_VALUE_INT";
+
+public void OnEnable()
+{
+    ModHelper.AddAppraisalItem("my_mod_id", "my_mod_id.antique_watch",
+        itemId: "my_mod_id.antique_watch",              // the item's directory id
+        unlockRank: AppraisalRankHelper.RANK_SENIOR,    // unlocked by the promotion to Senior Appraiser
+        createRandom: CreateRandomWatch,
+        getCorrectValue: watch => watch.GetTagReadonly(WATCH_VALUE_INT).GetInt(),
+        guideItemId: "my_mod_id.watch_guide");          // handed over with that promotion
+}
+
+private static GameItem CreateRandomWatch()
+{
+    GameItem watch = DirectoryMaster.Item("my_mod_id.antique_watch");
+    int value = RNG.GetRandomInt(80, 400);
+    watch.ModifyTag(WATCH_VALUE_INT, state => state.Enable().SetInt(value));
+    AppraisalHelper.InitAppraisalItem(watch, 100);      // marks it as an appraisal item, 100 prefills the estimate
+    return watch;
+}
+
+public void OnDisable()
+{
+    ModHelper.RemoveAppraisalItems("my_mod_id");
+}
+```
+
+规则：
+
+- **等级。** `AppraisalRankHelper.RANK_JUNIOR`（0，初级鉴定师）、`RANK_APPRAISER`（1）、`RANK_SENIOR`（2）、`RANK_MASTER`（3）。多个类型可以共用一个等级：该次晋升会一起解锁它们。原版：`hand` 在初级，`ribwich` 在鉴定师，`plasma_fuel` 在高级，大师级不解锁物品。`ModHelper.GetAppraiserRank()` 读取玩家的等级。
+- **评级。** 估价以 `getCorrectValue` 为准评级：误差 5% 以内为完美，10% 以内为优秀，15% 以内为良好，25% 以内为一般，超出则为糟糕。低于 50% 或高于 150% 一律被拒绝，每个等级还会拒绝部分较差的评级。请根据物品自身的状态计算数值，让它在物品放在柜台上时保持不变。
+- **`isType`** 告诉游戏某件物品属于你的类型。默认比较物品的标识符与 `itemId`；如果你的变体使用其他标识符，请传入自己的函数。
+- **屏蔽。** 玩家可以屏蔽在最新资格之前解锁的类型；最新等级的类型始终留在池中。
+- **替换。** 注册 `hand`、`ribwich` 或 `plasma_fuel` 会替换原版条目（例如把它移到另一个等级）。`RemoveAppraisalItems(modId)` 会移除你的条目，但被替换的原版条目要重启游戏后才会恢复。
+- **`displayName`** 是证书提示框和"使用"窗口中显示的名称；默认是 `itemId` 对应物品的名称。
+- **`guideItemId`** 在玩家晋升到 `unlockRank` 时发放，玩家已经拥有一份时则不发。初级类型在加入委员会时就已解锁，所以它们的指南不会通过晋升发放。
 
 ---
 
@@ -1233,7 +1284,8 @@ public class MyMod : IMod
 - 传入字面 `null` id 的 `Harmony.UnpatchAll()`（它会移除所有模组的补丁，包括游戏自己的修复）；
 - 针对游戏模组加载器或信任代码的 Harmony 补丁或反射：`ModLoader`、`ModTrust`、`ModTrustRecord`、`ModFingerprint`、`ModTrustList`、`ModScanner`、`ModCapability`、`ModSecurityDebug`；
 - 自带 `0Harmony`、MonoMod 或 Cecil，或任何与游戏程序集同名的 DLL（包括游戏已经附带的库，例如 `Newtonsoft.Json`）。请引用游戏自带的副本；
-- 文件夹中有 `<Assemblies>` 未列出的 DLL，或者所列 DLL 引用了既不是游戏的、也未列出的程序集。运行时会不经扫描直接从你的文件夹加载这种文件，所以整个模组会被拒绝，直到清单把它列出来。
+- 文件夹中有 `<Assemblies>` 未列出的 DLL，或者所列 DLL 引用了既不是游戏的、也未列出的程序集。运行时会不经扫描直接从你的文件夹加载这种文件，所以整个模组会被拒绝，直到清单把它列出来；
+- 扫描器无法读取的 DLL：无法解析的方法体或 `[HarmonyPatch]` 特性会导致模组被拒绝，而不是被跳过。
 
 你捆绑的第三方库会像你自己的代码一样被扫描，而且必须列出。其中许多在内部使用反射或 `Reflection.Emit`，这就需要写进你的 `<Capabilities>`；请优先使用游戏已经附带的库。图片、音频、JSON、XML 或 `.resources` 文件作为嵌入资源没有问题。
 
@@ -1293,7 +1345,7 @@ string folder = ModHelper.GetModDataFolder("my_mod_id");                      //
 - 如果 `Mods/` 中的本地文件夹与某个已订阅物品有相同的 `<ID>`，将使用本地副本并忽略创意工坊副本。第一次用本地副本启动时，它会显示为"未加载：自你批准后已更改（它现在来自与已批准副本不同的地方）"：点一次**审核并启用**，之后它的**开发者模式**按钮才会出现。这就是你在不取消订阅的情况下测试自己模组新版本的方式。"模组"菜单会在该本地模组上注明这一点，它的 Steam 按钮和"取消订阅"作用于该创意工坊物品（取消订阅后本地副本保留）。
 - 第一次打开"模组"菜单时，游戏会提醒玩家模组可能包含代码。请记住这一点：一个行为不端的模组会损害所有模组作者的声誉。
 
-创意工坊仅在正式版游戏上可用，试玩版没有。
+创意工坊仅在正式版游戏上可用，试玩版和 playtest 版本没有。
 
 ### 用 steamcmd 发布
 

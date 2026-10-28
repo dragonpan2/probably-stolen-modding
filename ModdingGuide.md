@@ -49,6 +49,7 @@ This guide covers advanced topics for mod development and assumes you have alrea
   - [Starting Perks](#starting-perks)
   - [Difficulties](#difficulties)
   - [Afterhour Locations](#afterhour-locations)
+  - [Appraisal Items](#appraisal-items)
   - [Mod Configuration](#mod-configuration)
   - [Capabilities and the Scanner](#capabilities-and-the-scanner)
     - [Declaring capabilities](#declaring-capabilities)
@@ -116,7 +117,7 @@ The bracketed prefix in console output comes from your manifest's `<Name>`. If y
 Probably Stolen ships with two in-game tools that are essential while developing and testing mods.
 
 - 🐛 **Debug Console (`F8`)**: opens a console that displays all log output, including messages from `ModLog`, `Debug.Log`, warnings, and errors. Use this to verify your mod loaded, watch hook points fire, and read stack traces when something goes wrong. Your mod's own `Debug.Log` and `ModLog` lines always show, and so do the mod loader's lines; the game's own info lines are hidden unless you turn on **F9 > Command > Toggle Verbose Log** (warnings and errors always show).
-- 🛠️ **Dev Menu (`F9`)**: opens a menu containing many functions useful for mod development and testing, such as spawning items, triggering events, and inspecting game state. Handy for reproducing edge cases without having to play through to them. The buttons sit in five columns: Store, Command, Spawn, Special, and Modding (the paper editor, book reload, asset viewers; see [Paper Books](#paper-books)).
+- 🛠️ **Dev Menu (`F9`)**: opens a menu containing many functions useful for mod development and testing, such as spawning items, triggering events, and inspecting game state. Handy for reproducing edge cases without having to play through to them. The main panel has four columns, Store, Command, Spawn and Special, with a search bar above them; the Special column also opens two separate windows, the Modding Panel (the paper editor, book reload, asset viewers; see [Paper Books](#paper-books)) and the Marketing Panel.
 
 ### Adding your own debug buttons
 
@@ -174,7 +175,7 @@ Player saves are permanent and belong to the player. As a mod author, you are re
 - **Loot table edits**: put your items into the game's drop tables, change or remove existing drops, or add whole new tables, from code or from a JSON file ([Loot Tables](#loot-tables))
 - **Custom UI**: build your own windows and panels (settings, inspectors, counters) from code, using the game's widgets ([Custom UI](#custom-ui))
 - **Paper books**: guides, cards and sheets in the game's paper look, laid out with the in-game editor and saved as JSON, with an item that opens them ([Paper Books](#paper-books))
-- **Machine windows**, **game options**, **Wild's Network upgrades**, **starting scenarios and perks**, **difficulties**, **afterhour locations and events**: each has its own section below
+- **Machine windows**, **game options**, **Wild's Network upgrades**, **starting scenarios and perks**, **difficulties**, **afterhour locations and events**, **appraisal items**: each has its own section below
 - **Mod configuration and mod data**: typed settings with a generated panel, a per-run key/value store, and files in your own folders ([Mod Configuration](#mod-configuration), [Saving Mod Data](#saving-mod-data))
 
 ### ❌ Not supported
@@ -185,7 +186,7 @@ Player saves are permanent and belong to the player. As a mod author, you are re
 - **Overhaul-style mods**: sweeping reworks that touch many systems at once
 
 - **Modded deals for the Underground Exchange**: adding new deals to the Underground Exchange
-- **Special Item**: Inspectable Items and Appraisal Items
+- **Inspectable items**: there is no API to register new ones (appraisal items have one, see [Appraisal Items](#appraisal-items))
 
 Unsupported features may become supported in a later update. Anything in this list can still be attempted with Harmony patches. Expect to maintain it yourself after each game update, and keep the [capability rules](#capabilities-and-the-scanner) in mind: patches on game code are free, but reflection into engine or system types is a declared capability.
 
@@ -305,6 +306,7 @@ Ship translations as one CSV file per language in `Localization/`, named by **lo
 | Portuguese (Brazil) | `ptBR` |
 | Korean | `ko` |
 | Italian | `it` |
+| Polish | `pl` |
 
 (A file with any other name is loaded but never resolves. If in doubt, print the current locale code with `ModHelper.GetCurrentLocale().Identifier.Code`.)
 
@@ -441,7 +443,12 @@ Once registered, spawn it anywhere with `ModHelper.SpawnItem("health_pack")`.
 | `ModHelper.MoveItemToTrash(item)` | the trash |
 | `ModHelper.MoveItemToAfterhours(item)` | the afterhour bag (what the player brings back from a night out) |
 
-`ModHelper.SetItemOwnerShip(item, isOwn)` marks the item as the player's (true) or a customer's (false) and returns it, so it chains: `ModHelper.MoveItemToFrontCounter(ModHelper.SetItemOwnerShip(ModHelper.SpawnItem("health_pack"), false))`. `ModHelper.SetSource(item, modId, modName)` stamps your mod id and name on the item as tags (`ModHelper.MOD_ID_TAG` / `MOD_NAME_TAG`), so your code, or another mod's, can tell where an item came from through `item.GetTagReadonly(ModHelper.MOD_ID_TAG).GetString()`. Nothing in the game reads them; the items made from your paper books carry them, anything else only if you call it. These helpers need a loaded run: the store's containers do not exist in the main menu, so calling them from `Init` or `OnEnable` throws a `NullReferenceException`. Call them from a hook such as `OnGameLoadedInit` or from your own UI.
+`ModHelper.SetItemOwnerShip(item, isOwn)` marks the item as the player's (true) or a customer's (false) and returns it, so it chains: `ModHelper.MoveItemToFrontCounter(ModHelper.SetItemOwnerShip(ModHelper.SpawnItem("health_pack"), false))`. `ModHelper.SetSource(item, modId, modName)` stamps your mod id and name on the item as tags (`ModHelper.MOD_ID_TAG` / `MOD_NAME_TAG`), so your code, or another mod's, can tell where an item came from through `item.GetTagReadonly(ModHelper.MOD_ID_TAG).GetString()`. These helpers need a loaded run: the store's containers do not exist in the main menu, so calling them from `Init` or `OnEnable` throws a `NullReferenceException`. Call them from a hook such as `OnGameLoadedInit` or from your own UI.
+
+**Players see where your content comes from.** Your mod's name (the manifest's `Name`, or its `ID` when there is no name) is the last line of the tooltip of every item you add, and the conversation recorder shows a "From Your Mod Name:" line before the first line of every customer you add. Players can turn either off in the options. You usually have nothing to do:
+
+- **Items** registered with `Add` or `Set` on a directory are recognized by their factory: a factory written in one of your mod's DLLs makes the item yours, also when it replaces a vanilla id. An item whose factory lives elsewhere (in a shared library mod, for example) needs `ModHelper.SetSource`, which also wins over the factory check. The items made from your paper books carry the tags already.
+- **Customers** you add to the client stack (`manager.AddClient(client)`) from an `OnGenerateCustomer*` hook are marked as yours. For a customer you add any other way (another hook, a Harmony patch, a factory of yours in one of the game's random client lists), call `ModHelper.SetClientSource(client, modId)` before it reaches the counter. To queue a vanilla customer from a hook without your name on it, call `ModHelper.SetClientSource(client, null)`. The line is written with the customer's opening dialogue, so a customer without one gets none.
 
 ### Available hooks
 
@@ -456,7 +463,7 @@ Replace `*` with a tier name, e.g. `ModHook.OnGenerateCustomerVeryEarly`, `ModHo
 | `OnGoingSleep*` / `OnWakingUp*` | Early, Late | The player goes to sleep / wakes up | none |
 | `OnLeavingStore*` / `OnReturningStore*` | Early, Late | The player leaves / returns to the storefront | none |
 | `OnHandlingNightlyServices*` | Early, Late | Nightly upkeep is processed | none |
-| `OnPlaceInventorInventoryItem*` | Early, Late | Items are placed into an inventory | `List<GameItem>` |
+| `OnPlaceInventorInventoryItem*` | Early, Late | Dr. Jackson (the inventor) stocks his sale table for a visit (Early: before the vanilla stock, Late: after it); add to it with `PlayerStore.Instance.AddDirectSellingItemToTable(itemId)` | `List<GameItem>` (the items the player owns, which the stock is chosen against) |
 | `OnCreateTooltip*` / `OnCreateDevTooltip*` | Early, Late | An item tooltip is being built (append your own lines) | `RichTextBuilder`, `GameItem` |
 | `OnModAssetsLoaded` | none | A mod's assets (textures, item sprites, sounds, localization) have all finished loading (fires once per enabled mod; check the mod is yours) | `LoadedMod` |
 | `OnLootTablesLoaded` | none | The loot tables have loaded and every mod edit has been applied (once per scene load) | none |
@@ -672,9 +679,9 @@ CustomUIManager.Window("my_mod_id.settings", "My Mod Settings", CustomUIManager.
 ```
 
 - `CustomUIManager.Window(id, title, layer)` starts a window and replaces any existing window with the same id. Prefix ids with your mod id to avoid collisions with other mods. `Show()` finishes the chain and returns a `CustomUIWindow`; `GetWindow()` returns it hidden instead.
-- Widgets: `AddLabel`, `AddButton`, `AddImage`, `AddToggle`, `AddSlider`, `AddInput`, `AddDropdown`, `AddProgressBar`, `AddSpace`, `AddFlexibleSpace`. Pass an `id` to any widget you want to update later. `AddInput` calls `onChanged` on enter or focus loss; pass `onTyping` for a per-keystroke callback. To filter a list live, do not recreate the window from that callback (it drops focus from the field): grab `builder.CurrentContainer` after the `Begin` call that made the list host, then `CustomUIBuilder.ClearContainer(host)` and refill it with `new CustomUIBuilder(CustomUIManager.Instance, window, host)`.
-- Layout: `BeginRow` / `BeginColumn` / `BeginGrid(columns, cellWidth, cellHeight)` / `BeginScroll(height)`, each closed with `End()`. `BeginRow(spacing, alignment)` and `BeginColumn(spacing, alignment)` accept a `TextAnchor` for their children (default `UpperLeft`; `UpperCenter` centers an icon over its label). Tabs: `BeginTabs()`, then one `BeginTab("Name") ... End()` per tab, then `EndTabs()`.
-- Window options: `SetSize`, `SetPosition`, `Center`, `SetDraggable`, `SetCloseOnEscape`, `OnClose(callback)`. `WithTooltip(text)` attaches a hover tooltip to the last added element.
+- Widgets: `AddLabel`, `AddHeader`, `AddWarning`, `AddSeparator`, `AddButton`, `AddCloseButton`, `AddIconButton(sprite, size, onClick)`, `AddImage`, `AddToggle`, `AddSlider`, `AddInput`, `AddDropdown`, `AddProgressBar`, `AddSpace`, `AddFlexibleSpace`. Pass an `id` to any widget you want to update later. `AddInput` calls `onChanged` on enter or focus loss; pass `onTyping` for a per-keystroke callback. To filter a list live, do not recreate the window from that callback (it drops focus from the field): grab `builder.CurrentContainer` after the `Begin` call that made the list host, then `CustomUIBuilder.ClearContainer(host)` and refill it with `new CustomUIBuilder(CustomUIManager.Instance, window, host)`.
+- Layout: `BeginRow` / `BeginColumn` / `BeginPanel(width, height)` (a framed box) / `BeginGrid(columns, cellWidth, cellHeight)` / `BeginScroll(height)` / `BeginScrollFlexible(minHeight)` (takes the height left in a fixed-height container), each closed with `End()`. `BeginRow(spacing, alignment)` and `BeginColumn(spacing, alignment)` accept a `TextAnchor` for their children (default `UpperLeft`; `UpperCenter` centers an icon over its label). Tabs: `BeginTabs()`, then one `BeginTab("Name") ... End()` per tab, then `EndTabs()`.
+- Window options: `SetSize`, `SetPosition`, `Center`, `SetDraggable`, `SetCloseOnEscape`, `OnClose(callback)`. `WithTooltip(text)` attaches a hover tooltip to the last added element. Looks: the in-game widgets on the scene layers and the dark options look on the meta and menu layers are picked automatically (`UseMetaPrefabs` forces the latter); `UseMachineryStyle()` on the builder, or `CustomUIManager.Instance.CreateWindow(id, title, layer, null, CustomUIManager.Style.Machinery)`, gives a window the Machinery content-window look of the machines.
 - Layers decide which canvas hosts the window: `LAYER_PAPER` (books and documents, most normal UI), `LAYER_FRONT`, `LAYER_REAR`, `LAYER_META` (options and escape menu) in the game scene, `LAYER_MENU` in the main menu, and `LAYER_OVERLAY`, the manager's own canvas that survives scene changes. Windows on a scene layer are destroyed with the scene, so rebuild them when needed, for example from `ModHook.OnGameLoadedNormal`. Targeting a layer that does not exist in the current scene falls back to the overlay with a warning.
 
 Update a window later through the handles:
@@ -704,7 +711,7 @@ Paper books are the game's paper-style panels: the appraisal guides, cards and s
 ### Making a book with the editor
 
 1. Start the game with your mod enabled (a local folder under `Mods/` with its `manifest.xml` and DLL) and load a save: paper books live on the store scene.
-2. Press `F9`, column **Modding**, **Paper Editor**. In the **Book** tab, under *New book*, pick your mod, type an id (letters, digits, underscores), choose a starter (blank notebook, appraisal guide, tutorial sheet or business card) and, if you want your own art, pick a background from `Textures/Paper/` of your mod. **Create and edit** writes `Mods/<yourMod>/Books/<id>.json` and opens it.
+2. Press `F9`, **Modding Panel** in the Special column, then **Paper Editor**. In the **Book** tab, under *New book*, pick your mod, type an id (letters, digits, underscores), choose a starter (blank notebook, appraisal guide, tutorial sheet or business card) and, if you want your own art, pick a background from `Textures/Paper/` of your mod. **Create and edit** writes `Mods/<yourMod>/Books/<id>.json` and opens it.
 3. Build the pages. **Palette** adds texts in every vanilla text style, images from any sprite (the picker lists the vanilla paper art and your own), text and icon buttons, flow regions that stack their children, and chrome parts. On the book itself: click selects, drag moves, the corner and edge handles resize, drag on empty paper draws a marquee, Shift adds to the selection, arrows nudge (Shift for 10), Alt-drag moves the panel. Elements snap to the grid, to other elements' edges and centers and to the page center (hold Ctrl to skip). **Inspector** edits the selected element's fields; **Elements** lists them in draw order with lock and visibility toggles; **Tools** has align, distribute, match size, z-order, undo and redo, zoom, a language preview and the shortcut list.
 4. Every change is saved into the JSON file within a second and the panel updates at once. Editing the file in a text editor works the same way: the game picks up the change and rebuilds the open book. The **Check** tab lists problems (missing sprites, overflowing texts, duplicate ids...), **Screenshot page** saves a PNG next to the file for your Workshop preview.
 5. **Pages** adds and reorders pages, and manages templates: a shared layout with named slots that each page fills (title, body, an illustration). The starters ship with the vanilla guide, tutorial sheet and business card layouts as built-in templates; *Create from the selected page elements* makes your own.
@@ -795,9 +802,9 @@ PaperUI ui = ModHelper.CreatePaper("my_mod_id", "recipes", "notebook_manual")
 
 ### Vanilla art and your own
 
-The sprite picker and `background` / `sprite` keys accept every sprite the vanilla paper panels use, by sprite name: backgrounds (`notebook_manual`, `guide_reworked`, `guide`, `tutorial_sheet`, `business_card_template`, `exchange`, `test_strips`, `mentors_notes`...), the chrome buttons (`paper_buttons_close1`, `paper_buttons_screen_0`, `paper_buttons_l_1`, `paper_buttons1`, `blue_button_2x`), the guide header (`guide_logo`) and the illustrations of the vanilla guides. **F9 > Modding > Paper Sprite Picker** browses them and copies a key. Your own art goes in `Textures/Paper/` of your mod (PNG or JPG, loaded as smooth UI sprites) and is named by file name, or `"my_mod_id:name"` from another mod's book. Item sprites from `Textures/Items/` work too. Two more families: the vanilla item sprites as `atlas/name` (`items_aquaculture/tilapia_large1`, `items_misc/manual1`; the palette's *Item sprite from the game atlases* button lists them) and the dark options chrome as `meta_` plus the sprite name (`meta_panel`, a sliced plate that also works as a background, `meta_seperator`, `meta_checkbox`...), plus the starting scenario icons by name (`icons_apprentice`, `icons_aquaculture`...).
+The sprite picker and `background` / `sprite` keys accept every sprite the vanilla paper panels use, by sprite name: backgrounds (`notebook_manual`, `guide_reworked`, `guide`, `tutorial_sheet`, `business_card_template`, `exchange`, `test_strips`, `mentors_notes`...), the chrome buttons (`paper_buttons_close1`, `paper_buttons_screen_0`, `paper_buttons_l_1`, `paper_buttons1`, `blue_button_2x`), the guide header (`guide_logo`) and the illustrations of the vanilla guides. **F9 > Special > Modding Panel > Paper Sprite Picker** browses them and copies a key. Your own art goes in `Textures/Paper/` of your mod (PNG or JPG, loaded as smooth UI sprites) and is named by file name, or `"my_mod_id:name"` from another mod's book. Item sprites from `Textures/Items/` work too. Two more families: the vanilla item sprites as `atlas/name` (`items_aquaculture/tilapia_large1`, `items_misc/manual1`; the palette's *Item sprite from the game atlases* button lists them) and the dark options chrome as `meta_` plus the sprite name (`meta_panel`, a sliced plate that also works as a background, `meta_seperator`, `meta_checkbox`...), plus the starting scenario icons by name (`icons_apprentice`, `icons_aquaculture`...).
 
-Console commands (F8): `paper-list`, `paper-open <id>`, `paper-close [id]`, `paper-reload`, `paper-edit [id]`, `paper-item <id>`. The F9 Modding column has **Reload Mod Books** for files added or edited while the game runs.
+Console commands (F8): `paper-list`, `paper-open <id>`, `paper-close [id]`, `paper-reload`, `paper-edit [id]`, `paper-item <id>`. The F9 Modding Panel has **Reload Mod Books** for files added or edited while the game runs.
 
 ---
 
@@ -825,10 +832,10 @@ MachineHelper.SetupBatterySlot(battery, item);
 ```
 
 - `MachineHelper.Panel(label, content, role)` puts an inventory (or a `GridPixelElement` of slots) in a sunken intake under a label plate; any other element (a stack, a button, tabs) is placed as is. `PowerPanel` and `NotePanel` use the design's battery and note icons; `IconPanel(sprite, content, role)` takes your own sprite (`"modId:spriteName"` keys work through `CustomUIManager.Instance.GetSprite`).
-- Widgets: `MachineryButton` (text, icon, or both; `SetDescription` for a tooltip; `Enable` / `Disable` / `Hide`), `MachineryRadioButton` (a toggle; `MachineryRadioGroup` keeps one on; `MachineryRadioList(captions, selected, onChanged)` is a captioned column), `MachineryProgressBar` (`SetValue(0..1)`, `SetColor`), `MachinerySlider` (`SetRange(min, max, step)` or `SetSteps(n)` plus `GetInt`; `onChanged`, `onReleased`), `MachineryTabs` (`AddTab(caption, page)`), `MachineryText` (one line, rich text allowed).
+- Widgets: `MachineryButton` (text, icon, or both; `SetDescription` for a tooltip; `Enable` / `Disable` / `Hide`), `MachineryRadioButton` (a toggle; `MachineryRadioGroup` keeps one on; `MachineryRadioList(captions, selected, onChanged)` is a captioned column), `MachineryProgressBar` (`SetValue(0..1)`, `SetColor`), `MachinerySlider` (`SetRange(min, max, step)` or `SetSteps(n)` plus `GetInt`; `onChanged`, `onReleased`), `MachineryRangeSlider` (two thumbs for a minimum and a maximum on one track; `SetRange`, `GetLowInt` / `GetHighInt`, `onChanged`, `onReleased`), `MachineryTabs` (`AddTab(caption, page)`), `MachineryText` (one line, rich text allowed; `WithInfoLink(id, tooltipProvider)` appends the game's info icon with a hover tooltip).
 - Layout: `MachineryStack.Vertical(...)` / `Horizontal(...)` stacks elements with a gap; a vertical stack stretches buttons, sliders, progress bars and texts to the panel width. `window.AddHeaderButton(new MachineryButton(icon, callback))` adds a button left of the close cross.
 - Reading a machine's inventories later: `MachineHelper.GetBodyStorage(item, i)` is the i-th inventory or grid of the body, left to right (`GetBatterySlot`, `GetModuleInv` and `GetSlot` use it), or `((MachineryPanelRow)window.childElement).GetPanel("role")`.
-- The panel order is the save order of the inventories. Once your mod has shipped, add new panels at the end and never reorder the existing ones, or saved items land in the wrong inventory.
+- The panel order is the save order of the inventories. Once your mod has shipped, add new panels at the end and never reorder the existing ones, or saved items land in the wrong inventory. To show a shipped window's panels in another order, pass `displayOrder` (indices into `panels`) to `CreateMachineryWindow(canMove, displayOrder, panels)`: the panels are drawn in that order and keep their storage order.
 - The classic window look is still available with `new PixelWindow(canMove)`; the Machinery style is `new PixelWindow(canMove, style: WindowStyle.Machinery)` with any element attached (a bare inventory gets one plate and intake drawn by the window).
 
 ---
@@ -873,7 +880,7 @@ Rules:
 - **Labels, tooltips and dropdown options are functions**, resolved every time the window opens, so `() => ModHelper.GetLocalized(...)` follows a language change. A tooltip adds the info icon next to the label.
 - **Ids are namespaced.** `optionId` and your own section ids are prefixed with your mod id internally, so they cannot collide with another mod. Registering an id again replaces the earlier entry. `RemoveGameOption(modId, optionId)` and `RemoveGameOptions(modId)` take entries out again. `ModHelper.GameOptionId(modId, optionId)` returns the prefixed id (`"modId:optionId"`) the game uses internally, for the rare case where you need to match an entry by its full id.
 - **Order** is registration order inside a section; your sections appear after the built-in ones.
-- **Key binds** refuse Escape, the digit keys and any key another bind row in the window already uses, and only keyboard keys can be captured. While the player is choosing a key, the game's own hotkeys stay quiet; yours should too: skip your poll while `KeyBindHelper.SuppressHotkeys` is true.
+- **Key binds** refuse Escape and any key another bind row in the window already uses (the digit keys stay bindable), and only keyboard keys can be captured. While the player is choosing a key, the game's own hotkeys stay quiet; yours should too: skip your poll while `KeyBindHelper.SuppressHotkeys` is true.
 - Callable from `OnEnable`; the window is built fresh on every open.
 
 Use this only for a setting that genuinely belongs among the game's own options. Settings about your mod itself go in your mod's configuration panel, below.
@@ -1132,7 +1139,51 @@ Rules:
 - **`isAvailable`** false shows the card greyed with "Unavailable" and refuses travel; `isDiscovered` false hides it. Both are asked every time the screen opens.
 - **Where am I.** `ModHelper.IsOutsideStore()` and `GetCurrentAfterhourLocationId()`; `GetAfterhourLocation(id)` returns any location's definition (vanilla or mod), null for an unknown id; the hooks `ModHook.OnAfterhourArriveEarly / Late` and `OnAfterhourLeaveEarly / Late` fire with the location id for every location, vanilla ones included (`AfterhourLocation.DUMPING_GROUND`, `COMMISSARY`, `DR_JACKSON`).
 - **State.** `GetAfterhourVisits(id)`, `GetAfterhourCounter(id, key)` / `SetAfterhourCounter(id, key, value)` are saved with the run under the location id.
-- **Events.** Several events can run on one location at once. `AddAfterhourEvent` with a `dailyChancePercent` starts on its own at day start while it is not already running (cap a location with `maxConcurrentEvents`), or with `weekdays` (`AfterhourWeekday.Wednesday`...) on those days of the station week (day 1 is Monday; a day a scheduled event starts on has no random events); `closesLocation: true` makes the location unavailable while the event runs (greyed card, no travel, the event still listed); `StartAfterhourEvent(eventId, days)` adds one from code (a running one is extended), `EndAfterhourEvent(eventId)` ends one, `EndAllAfterhourEvents(locationId)` all; `IsAfterhourEventActive(eventId)`, `GetActiveAfterhourEventIds(locationId)` and `GetAfterhourModifier(locationId, key)` (the sum over the running events) read them; your own mechanics read your own modifier names. The vanilla modifiers are relative percentages on a chance the game already has (write the effect line as "X% more/less likely"): the dumping ground reads `injury_chance` (scales both wound chances), `junk_chance` (scales the junk table's weight in the loot roll, negative for less junk) and `loot_double_chance` (percentage points added to the scanner's double-loot chance); two are not chances: `injury_immunity` (above 0: no wounds at all) and `scav_attempts` (flat extra attempts per night). Dr. Jackson's reads `inventor_sell_price` (relative change of his shop prices) and the commissary `commissary_restock_percent_of_max` (a share of each item's max stock added at day start). The vanilla events (`fresh_dump`, `georgio_assistance`, `special_stock`, `jackson_discount`, `commissary_burglary`, `fresh_restock`) use them. On the card the title is green when every effect is good, red when every one is bad and orange when mixed (pass `tone` to force one); the days left show after the description. `ModHook.OnAfterhourEventStarted / Ended` fire with the location id and the event id. The F9 console's `afterhour-events`, `afterhour-event-start` and `afterhour-event-end` test them.
+- **Events.** Several events can run on one location at once. `AddAfterhourEvent` with a `dailyChancePercent` starts on its own at day start while it is not already running (cap a location with `maxConcurrentEvents`), or with `weekdays` (`AfterhourWeekday.Wednesday`...) on those days of the station week (day 1 is Monday; a day a scheduled event starts on has no random events); `closesLocation: true` makes the location unavailable while the event runs (greyed card, no travel, the event still listed); `StartAfterhourEvent(eventId, days)` adds one from code (a running one is extended), `EndAfterhourEvent(eventId)` ends one, `EndAllAfterhourEvents(locationId)` all; `IsAfterhourEventActive(eventId)`, `GetActiveAfterhourEventIds(locationId)` and `GetAfterhourModifier(locationId, key)` (the sum over the running events) read them; your own mechanics read your own modifier names. The vanilla modifiers are relative percentages on a chance the game already has (write the effect line as "X% more/less likely"): the dumping ground reads `injury_chance` (scales both wound chances), `junk_chance` (scales the junk table's weight in the loot roll, negative for less junk) and `loot_double_chance` (percentage points added to the scanner's double-loot chance); two are not chances: `injury_immunity` (above 0: no wounds at all) and `scav_attempts` (flat extra attempts per night). Dr. Jackson's reads `inventor_sell_price` (relative change of his shop prices) and the commissary `commissary_restock_percent_of_max` (a share of each item's max stock added at day start). The vanilla events (`fresh_dump`, `georgio_assistance`, `special_stock`, `jackson_discount`, `jackson_closed`, `commissary_burglary`, `fresh_restock`) use them. On the card the title is green when every effect is good, red when every one is bad and orange when mixed (pass `tone` to force one); the days left show after the description. `ModHook.OnAfterhourEventStarted / Ended` fire with the location id and the event id. The F9 console's `afterhour-events`, `afterhour-event-start` and `afterhour-event-end` test them.
+
+---
+
+## Appraisal Items
+
+Appraisal customers bring items the player has to price: the Cybernetic Hand, the Packaged Rib Sandwich and the Plasma Cartridge. Each type unlocks at an Appraiser Board rank. A customer brings 2 to 4 items of one type, picked with equal odds among the unlocked types the player has not blocked (the certificate's Activate window). Your mod can add types, or move a vanilla type to another rank.
+
+```csharp
+private const string WATCH_VALUE_INT = "MY_MOD_WATCH_VALUE_INT";
+
+public void OnEnable()
+{
+    ModHelper.AddAppraisalItem("my_mod_id", "my_mod_id.antique_watch",
+        itemId: "my_mod_id.antique_watch",              // the item's directory id
+        unlockRank: AppraisalRankHelper.RANK_SENIOR,    // unlocked by the promotion to Senior Appraiser
+        createRandom: CreateRandomWatch,
+        getCorrectValue: watch => watch.GetTagReadonly(WATCH_VALUE_INT).GetInt(),
+        guideItemId: "my_mod_id.watch_guide");          // handed over with that promotion
+}
+
+private static GameItem CreateRandomWatch()
+{
+    GameItem watch = DirectoryMaster.Item("my_mod_id.antique_watch");
+    int value = RNG.GetRandomInt(80, 400);
+    watch.ModifyTag(WATCH_VALUE_INT, state => state.Enable().SetInt(value));
+    AppraisalHelper.InitAppraisalItem(watch, 100);      // marks it as an appraisal item, 100 prefills the estimate
+    return watch;
+}
+
+public void OnDisable()
+{
+    ModHelper.RemoveAppraisalItems("my_mod_id");
+}
+```
+
+Rules:
+
+- **Ranks.** `AppraisalRankHelper.RANK_JUNIOR` (0, Junior Appraiser), `RANK_APPRAISER` (1), `RANK_SENIOR` (2), `RANK_MASTER` (3). Several types can share a rank: the promotion unlocks all of them. Vanilla: `hand` at Junior, `ribwich` at Appraiser, `plasma_fuel` at Senior, nothing at Master. `ModHelper.GetAppraiserRank()` reads the player's rank.
+- **Grading.** The estimate is graded against `getCorrectValue`: Perfect within 5%, Excellent within 10%, Good within 15%, Mediocre within 25%, Awful beyond. Below 50% or above 150% is always refused, and each rank refuses some of the poor grades. Compute the value from the item's own state so it does not change while the item is on the counter.
+- **`isType`** tells the game an item belongs to your type. The default compares the item's identifier with `itemId`; pass your own when your variants use other identifiers.
+- **Blocking.** The player can block the types unlocked before their newest qualification; the types of the newest rank always stay in the pool.
+- **Replacing.** Registering `hand`, `ribwich` or `plasma_fuel` replaces the vanilla entry (for example to move it to another rank). `RemoveAppraisalItems(modId)` removes your entries, but a replaced vanilla entry only comes back after a restart.
+- **`displayName`** is the name shown in the certificate tooltip and the Activate window; the default is the item's name from `itemId`.
+- **`guideItemId`** is given when the player is promoted to `unlockRank`, unless they already own one. Junior types are unlocked at the join, so their guide is never handed over by a promotion.
 
 ---
 
@@ -1233,7 +1284,8 @@ Some patterns refuse the activation whatever the manifest says, because no legit
 - `Harmony.UnpatchAll()` with a literal `null` id (it removes every mod's patches, the game's own fixes included);
 - Harmony patches or reflection aimed at the game's mod loader or trust code: `ModLoader`, `ModTrust`, `ModTrustRecord`, `ModFingerprint`, `ModTrustList`, `ModScanner`, `ModCapability`, `ModSecurityDebug`;
 - shipping your own `0Harmony`, MonoMod or Cecil, or any DLL named like a game assembly (including libraries the game already ships, such as `Newtonsoft.Json`). Reference the game's copies instead;
-- a DLL in your folder that `<Assemblies>` does not list, or a listed DLL that references an assembly which is neither the game's nor listed. The runtime would load such a file from your folder without the scan, so the whole mod is refused until the manifest lists it.
+- a DLL in your folder that `<Assemblies>` does not list, or a listed DLL that references an assembly which is neither the game's nor listed. The runtime would load such a file from your folder without the scan, so the whole mod is refused until the manifest lists it;
+- a DLL the scanner cannot read: a method body or a `[HarmonyPatch]` attribute it cannot decode refuses the mod rather than being skipped.
 
 Third-party libraries you bundle are scanned like your own code and must be listed. Many of them use reflection or `Reflection.Emit` internally, which then has to appear in your `<Capabilities>`; prefer libraries the game already ships. Embedded resources that are images, sounds, JSON, XML or `.resources` files are fine.
 
@@ -1293,7 +1345,7 @@ What players see:
 - If a local folder in `Mods/` has the same `<ID>` as a subscribed item, the local copy is used and the Workshop copy is ignored. That is how you test a new version of your own mod without unsubscribing. The first start with the local copy shows it as "Not loaded: changed since you approved it (it now comes from a different place than the approved copy)": use **Review and enable** once, after which the **Developer mode** button appears for it. The Mods menu notes it on the local mod, and that mod's Steam button and Unsubscribe act on the Workshop item (unsubscribing keeps the local copy).
 - The first time the Mods menu opens, the game tells the player that mods can contain code. Keep that in mind: a mod that behaves badly hurts every modder's reputation.
 
-Workshop is available on the main game only, not on the demo.
+Workshop is available on the main game only, not on the demo or the playtest build.
 
 ### Publishing with steamcmd
 

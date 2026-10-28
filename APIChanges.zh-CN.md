@@ -15,6 +15,8 @@ English version: [APIChanges.md](APIChanges.md)
 
 **新增**
 
+- **玩家能看到你的模组名。** 它是你所添加物品提示框的最后一行；对于你添加的顾客，对话记录器会在其第一句台词之前显示"来自你的模组名："（两者都是玩家选项，默认开启）。从你的 DLL 注册的物品、在 `OnGenerateCustomer*` 钩子中加入的顾客会被自动识别；以其他方式加入的顾客用 `ModHelper.SetClientSource(client, modId)` 标记，工厂函数不是你的代码的物品用 `ModHelper.SetSource` 标记。[详情](ModdingGuide.zh-CN.md#通过物品目录钩子添加物品)
+- **你自己的鉴定物品。** `ModHelper.AddAppraisalItem(modId, id, itemId, unlockRank, createRandom, getCorrectValue, isType, guideItemId, displayName)` 添加一种鉴定物品类型，玩家的鉴定师委员会等级解锁后，鉴定顾客就会带来它（每个等级可有多个；相同 id 会替换原版类型）。估价以你的 `getCorrectValue` 评级。`RemoveAppraisalItems(modId)` 移除它们，`GetAppraiserRank()` 读取等级。[详情](ModdingGuide.zh-CN.md#鉴定物品)
 - **无需 `files` 能力的文件访问。** `ModHelper.ReadModFileText / ReadModFileBytes / ModFileExists / GetModFolder` 读取你的模组文件夹；`GetModDataFolder`、`ReadModDataFileText / Bytes`、`WriteModDataFileText / Bytes`、`DeleteModDataFile`、`ListModDataFiles` 读写存档位置下每个模组专属的文件夹。只接受相对路径。用它们代替 `System.IO`，就无需声明任何能力。[详情](ModdingGuide.zh-CN.md#不声明能力也能读写文件)
 - **控制台命令** `mod-scan <id 或文件夹>`（扫描器在你的 DLL 中发现了什么，以及该版本的 fingerprint 哈希）、`mod-trust [id]`（这台电脑上的批准记录）和 `mod-trust-list`（远程名单状态）。[详情](ModdingGuide.zh-CN.md#发布前自查)
 - **难度成为数据。** 现在有四个难度（cozy、normal、hard、challenge），`ModHelper.AddDifficulty(modId, id, order, title, subtitle, configure, basedOn, notes, iconKey)` 可添加你自己的难度：一组游戏直接读取的 `DifficultyRules` 数值，在选择界面按顺序列出，并根据与普通难度不同的规则生成说明。`ModifyDifficulty(id, modify)` 调整任意难度，`RemoveDifficulties(modId)` 移除你的难度，`GetDifficultyId()` / `GetDifficultyRules()` / `IsDifficultyAtLeast(id)` 读取当前难度，一局开始或载入时触发 `ModHook.OnDifficultyApplied(id)`。`PlayerStore.IsHardMode()` 现在表示困难或更高。[详情](ModdingGuide.zh-CN.md#难度)
@@ -27,6 +29,7 @@ English version: [APIChanges.md](APIChanges.md)
 - **控制台命令** `loot-list [id]` 和 `loot-roll <id> [count]`，用于查看实际概率、哪个模组改了什么，以及试掷一张表。[详情](ModdingGuide.zh-CN.md#在控制台中查看掉落表)
 - **模组数据存储。** 用 `ModHelper.SetModData / GetModData`（以及 `Int`、`Float`、`Bool` 变体、`HasModData`、`RemoveModData`、`GetModDataKeys`、`ClearModData`）保存任何不属于某个物品的数据。按模组 ID 隔离命名空间，随本局游戏一起保存，载入时恢复。[详情](ModdingGuide.zh-CN.md#保存模组数据)
 - **自定义 UI。** 用 `CustomUIManager` 的链式构建器从代码创建你自己的窗口（标签、按钮、开关、滑块、输入框、下拉框、进度条、图片、标签页、滚动列表），可放在任意游戏画布上或一个跨场景持久的覆盖层上。模组精灵图通过 `"modId:spriteName"` 键使用。自定义 UI 从"暂不支持"列表移入已支持列表。[详情](ModdingGuide.zh-CN.md#自定义-ui)
+- **自定义 UI 与机器窗口的新增内容。** 构建器新增 `AddHeader`、`AddWarning`、`AddSeparator`、`AddCloseButton`、`AddIconButton`、`BeginPanel`、`BeginScrollFlexible`，以及第三种外观 `UseMachineryStyle()` / `CustomUIManager.Style.Machinery`：机器内容窗口的 Machinery 风格。机器窗口新增 `MachineryRangeSlider`、`MachineryText.WithInfoLink`，以及 `CreateMachineryWindow(canMove, displayOrder, panels)`，可在不影响存档的情况下以另一种顺序绘制已发布窗口的面板。[详情](ModdingGuide.zh-CN.md#自定义-ui)
 - **你自己的 F9 调试按钮。** `ModHelper.AddDebugFunction(modId, category, name, action, tall)` 在 F9 开发菜单的 Store、Command、Spawn 或 Special 列下添加一个按钮；`RemoveDebugFunctions(modId)` 再把它们移除。可在 `OnEnable` 中调用。[详情](ModdingGuide.zh-CN.md#添加你自己的调试按钮)
 - **模组配置。** `ModHelper.GetConfig(modId).Define(...)` 为你的模组提供有类型、会保存的设置（bool、int、带可选范围的 float、带可选选项的 string、枚举），以及"模组"菜单中齿轮按钮后面自动生成的配置面板，带"应用"和"恢复默认"。值按模组保存在 `ModConfigs/<modId>.json` 中，`ConfigEntry.OnChanged` 和 `ModHook.OnModConfigApplied` 报告变化。[详情](ModdingGuide.zh-CN.md#模组配置)
 - **Steam 创意工坊（仅正式版）。** 已订阅的物品像 `Mods/` 文件夹一样加载，在"模组"菜单中带 Steam 图标显示，玩家激活之前保持未激活；菜单中可以取消订阅并打开物品页面。与已订阅物品 `<ID>` 相同的本地文件夹会覆盖创意工坊副本。发布通过 steamcmd 完成，不在游戏内。[详情](ModdingGuide.zh-CN.md#steam-创意工坊)
