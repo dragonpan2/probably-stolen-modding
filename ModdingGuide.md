@@ -12,6 +12,9 @@ This guide covers advanced topics for mod development and assumes you have alrea
   - [Example Projects](#example-projects)
   - [Logging with ModLog](#logging-with-modlog)
   - [Dev Tools](#dev-tools)
+    - [Turning the tools on with dev.txt](#turning-the-tools-on-with-devtxt)
+    - [Debug Console (F8)](#debug-console-f8)
+    - [Dev Menu (F9)](#dev-menu-f9)
     - [Adding your own debug buttons](#adding-your-own-debug-buttons)
   - [Save File Responsibility](#save-file-responsibility)
   - [Supported \& Unsupported Modding Features](#supported--unsupported-modding-features)
@@ -114,10 +117,55 @@ The bracketed prefix in console output comes from your manifest's `<Name>`. If y
 
 ## Dev Tools
 
-Probably Stolen ships with two in-game tools that are essential while developing and testing mods.
+Probably Stolen ships with two in-game tools that are essential while developing and testing mods:
 
-- 🐛 **Debug Console (`F8`)**: opens a console that displays all log output, including messages from `ModLog`, `Debug.Log`, warnings, and errors. Use this to verify your mod loaded, watch hook points fire, and read stack traces when something goes wrong. Your mod's own `Debug.Log` and `ModLog` lines always show, and so do the mod loader's lines; the game's own info lines are hidden unless you turn on **F9 > Command > Toggle Verbose Log** (warnings and errors always show).
-- 🛠️ **Dev Menu (`F9`)**: opens a menu containing many functions useful for mod development and testing, such as spawning items, triggering events, and inspecting game state. Handy for reproducing edge cases without having to play through to them. The main panel has four columns, Store, Command, Spawn and Special, with a search bar above them; the Special column also opens two separate windows, the Modding Panel (the paper editor, book reload, asset viewers; see [Paper Books](#paper-books)) and the Marketing Panel.
+- 🐛 **Debug Console (`F8`)**: a command console (Quantum Console) that also shows the log. Use it to verify your mod loaded, watch hook points fire, read stack traces, and run the game's test commands.
+- 🛠️ **Dev Menu (`F9`)**: a panel of buttons for spawning items, triggering events and changing game state, so you can reproduce an edge case without playing through to it. Your mod can add its own buttons.
+
+### Turning the tools on with dev.txt
+
+Both tools are switched off in the shipped game so that players never open them by accident. Pressing F8 or F9 does nothing until you turn them on:
+
+1. Open the game folder, the one that holds `Probably Stolen.exe` and `Mods/`. In Steam: right-click the game, **Manage > Browse local files**.
+2. Create an empty file named `dev.txt` there. Windows hides known extensions by default, so check that the file is not `dev.txt.txt` (turn on **View > File name extensions** in Explorer).
+3. Start the game. The file is checked once at launch: after creating or deleting it, restart the game.
+
+Delete the file to play normally again. Nothing else changes: your saves, your mods and the game's behavior are the same with or without it, and players of your mod never need it. Don't ship a `dev.txt` with your mod.
+
+At launch the log gets a `[DevTools]` line: "Developer tools enabled" when the file was found, or "Developer tools disabled" with the full path the game looked at. If F8 does nothing, the console is off, so read that line in `Player.log` (`%USERPROFILE%\AppData\LocalLow\Questing Goose Studio\Probably Stolen\Player.log`) and compare the path with where you put the file.
+
+The demo and playtest builds don't contain the tools at all, so `dev.txt` has no effect there. Develop against the full game.
+
+### Debug Console (F8)
+
+Press `F8` to open or close the console. It shows all log output: messages from `ModLog` and `Debug.Log`, warnings, and errors with their stack traces. Your mod's own lines and the mod loader's lines always show. The game's own info lines are hidden unless you turn on **F9 > Command > Toggle Verbose Log**; warnings and errors always show. When a mod from the `Mods/` folder fails to load, the console opens on its own at launch.
+
+Type a command and press `Enter`. `Tab` cycles through the suggestions while you type, and the arrow keys recall earlier commands. While the console has focus, the game's keyboard shortcuts are ignored.
+
+| Command | What it does |
+|---|---|
+| `help` | Basic help for the console itself |
+| `man <command>` | The description and parameters of one command |
+| `user-commands` | Every command the game adds (the ones below and a few more) |
+| `all-commands` | Everything, including the engine-level commands that come with Quantum Console |
+| `clear` | Clears the console |
+| `mod-scan <id or folder>` | What the scanner finds in a mod's DLLs, and the version's fingerprint ([details](#checking-before-you-publish)) |
+| `mod-trust [id]`, `mod-trust-list`, `mod-trust-list-fetch` | The approvals on this computer and the developers' remote list |
+| `loot-list [id]`, `loot-roll <id> [count]` | Loot tables with their effective odds, and test rolls ([details](#inspecting-tables-in-the-console)) |
+| `paper-list`, `paper-open <id>`, `paper-close [id]`, `paper-reload`, `paper-edit [id]`, `paper-item <id>` | Paper books ([details](#paper-books)) |
+| `afterhour-events`, `afterhour-event-start <id> [days]`, `afterhour-event-end <id>` | Afterhour location events ([details](#afterhour-locations)) |
+| `loc-plural-test <table> <key>`, `loc-smart-list` | Check a localized entry with a range of numbers, and list the entries that use plural formatting |
+
+Run `man <command>` for the exact parameters of any of them. The engine-level commands from `all-commands` (destroying objects, calling methods by name...) act on the running game directly: use them on a test save.
+
+### Dev Menu (F9)
+
+Press `F9` during a run (it does nothing on the main menu). The main panel has four columns, **Store**, **Command**, **Spawn** and **Special**, with a search bar above them that filters every button by name. Useful ones while testing a mod:
+
+- **Command > Toggle Verbose Log** shows the game's own info lines in the F8 console.
+- **Special > Modding Panel** opens a separate window with the modding tools: the paper editor, **Reload Mod Books**, the paper sprite picker and the asset viewers (see [Paper Books](#paper-books)).
+
+Many buttons change the current save for good (money, reputation, unlocks, spawned items). Test on a save you don't mind breaking.
 
 ### Adding your own debug buttons
 
@@ -141,7 +189,7 @@ public void OnDisable()
 }
 ```
 
-- `AddDebugFunction(modId, category, name, action, tall = false)`: `category` is one of `ModHelper.DEBUG_CATEGORY_STORE / COMMAND / SPAWN / SPECIAL / MODDING / MARKETING` (anything else lands in Special with a warning). The first four are columns of the main F9 panel; `MODDING` and `MARKETING` are separate windows, opened from the main panel's Special column ("Modding Panel", "Marketing Panel"). Keep `name` to three or four words; longer names shrink to fit the button.
+- `AddDebugFunction(modId, category, name, action, tall = false)`: `category` is one of `ModHelper.DEBUG_CATEGORY_STORE / COMMAND / SPAWN / SPECIAL / MODDING / MARKETING` (anything else lands in Special with a warning). The first four are columns of the main F9 panel; `MODDING` is a separate window, opened from the main panel's Special column ("Modding Panel"). `MARKETING` is kept for compatibility and lands in Special: the Marketing Panel is a developer-only window. Keep `name` to three or four words; longer names shrink to fit the button.
 - `RemoveDebugFunctions(modId)` drops every button your mod registered and returns how many.
 - Exceptions thrown by your action are caught and logged to the F8 console, so a broken button never takes the menu down with it.
 - The F9 menu does not exist in limited builds, where both calls are no-ops.
@@ -856,8 +904,11 @@ public void OnEnable()
         v => { fastCourier = v; PlayerPrefs.SetInt("my_mod_id.fast_courier", v ? 1 : 0); },
         tooltip: () => "Couriers arrive twice as fast.");
 
+    // Whole-number sliders show their value next to the knob; other sliders show only what
+    // valueText formats (nothing when it is left out).
     ModHelper.AddGameOptionSlider("my_mod_id", "settings", "spawn_rate",
-        () => "Spawn rate", () => spawnRate, v => spawnRate = v, min: 0f, max: 2f);
+        () => "Spawn rate", () => spawnRate, v => spawnRate = v, min: 0f, max: 2f,
+        valueText: v => Mathf.RoundToInt(v * 100f) + "%");
 
     ModHelper.AddGameOptionDropdown("my_mod_id", "settings", "difficulty",
         () => "Difficulty", () => new[] { "Easy", "Normal", "Hard" }, () => difficulty, i => difficulty = i);
@@ -1484,7 +1535,7 @@ Open the **F8 console** first: every mod logs its load result, asset counts, and
 | Mod is active but shows a warning icon and "Not loaded: ..." | The trust check kept it out this start. *Not yet approved on this computer*: select it and use **Review and enable**. *Changed since you approved it (reason)*: your files changed in a way that needs a fresh approval; the reason is one of "the new version asks for new capabilities", "the new version uses capabilities it does not declare", "the new version was refused by the mod scanner", "its folder contains DLLs the manifest does not list", "it now comes from a different place than the approved copy" or "it is a different Workshop item" (local copy versus subscription), or "its files could not be checked" (a DLL locked by your build or an antivirus). Fix what it says, then **Review and enable**. *Blocked by the developers*: the version is on the remote block list. *Mod loading is paused by the developers*: an emergency pause for everyone, nothing to do on your side. While developing a local mod, turn on **Developer mode** in the detail pane so rebuilds are trusted without this step. |
 | Activation is refused: "uses capabilities its manifest does not declare" | Run `mod-scan <id>` in the F8 console: each finding names the method and the API it reaches. Either declare the capability in `<Capabilities>` or switch to a capability-free alternative (the table in [Declaring capabilities](#declaring-capabilities)). Most `reflection-external` findings disappear by using `typeof(GameType)` instead of a string. |
 | Activation is refused: "refused by the mod scanner" or "DLLs in its folder that its manifest does not list" | A hard refusal: an unlisted DLL in the folder or a reference to an assembly that is neither the game's nor listed, an embedded executable or encrypted resource, suspicious string constants, `UnpatchAll()` without an id, a patch on the loader, or a bundled `0Harmony`. `mod-scan` names it. See [Hard refusals](#hard-refusals). |
-| `[Your Mod Name] Error: ...` in the console, and a warning icon on your mod in the Mods menu | Your DLL failed to load (a library it references is missing, or it targets the wrong framework), a DLL carries the name of a game assembly, or `Init`, `OnEnable`, or a Harmony patch threw. The line names the exception and the full stack trace follows it. When a mod from the `Mods/` folder fails, the console opens on its own at launch (Workshop mods only get the warning icon). The mod stays in the active list so you can deactivate it. |
+| `[Your Mod Name] Error: ...` in the console, and a warning icon on your mod in the Mods menu | Your DLL failed to load (a library it references is missing, or it targets the wrong framework), a DLL carries the name of a game assembly, or `Init`, `OnEnable`, or a Harmony patch threw. The line names the exception and the full stack trace follows it. When a mod from the `Mods/` folder fails, the console opens on its own at launch (with `dev.txt` in place; Workshop mods only get the warning icon). The mod stays in the active list so you can deactivate it. |
 | Code changes don't take effect | You copied an old DLL. Rebuild (`dotnet build -c Release`); a project made with `create-mod.bat` installs itself into `Mods\`, otherwise copy the fresh DLL from `bin/Release/netstandard2.1/` into the mod folder. Then check the Mods menu: a rebuild changes the hashes, so without **Developer mode** the mod may wait for **Review and enable**. |
 | A library I bundle is refused or forces capabilities | Every DLL you ship must be listed in `<Assemblies>` and is scanned like your code. Libraries the game already ships (`0Harmony`, `Newtonsoft.Json`, Unity assemblies) must not be bundled at all; reference the game's copies. Other libraries that use `Reflection.Emit` or reflection internally make those capabilities yours to declare. |
 | Item shows the "unknown" placeholder sprite | The `spriteKey` or mod ID passed to `SetSpriteAndShapeFromMod` doesn't match. The key is the **file name** (no extension, no folder); the ID is your manifest `<ID>`, **not** the folder name. Check the `item sprite(s) loaded` count in the console. |

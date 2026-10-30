@@ -4,12 +4,13 @@
 
 What changed in the modding API, per game update, newest on top. Within each update, entries are ordered by importance: things you must act on first, new capabilities last. Full documentation lives in [ModdingGuide.md](ModdingGuide.md).
 
-## Next update (in development)
+## October 2026 (1.0 release)
 
 **Action recommended**
 
 - **`manifest.xml` needs `<Assemblies>` and `<Capabilities>`.** A manifest without both is not listed. List every DLL to load under `<Assemblies>` (any other DLL in the folder refuses the activation, as does a DLL named like a game or framework assembly), and declare under `<Capabilities>` what your code does beyond the game's API: `files`, `network`, `process`, `dynamic-code`, `native`, `reflection-external`. The element is usually empty. When a player activates your mod the game scans your DLLs: an undeclared capability refuses the activation, declared ones are shown to the player before they approve. Check yours with the console command `mod-scan <id>`. [Details](ModdingGuide.md#capabilities-and-the-scanner)
 - **Approval is per computer and per version.** The player's Activate click records the hashes of your files. An update that adds no capability keeps running; one that adds a capability waits until the player reviews it again. While you iterate on a local mod, turn on **Developer mode** in the Mods menu so your rebuilds are trusted. [Details](ModdingGuide.md#what-players-see)
+- **The F8 console and F9 dev menu need `dev.txt`.** Both are off in the shipped game until an empty file named `dev.txt` exists next to the game's executable. Create it once on your development machine; nothing changes for your mod. The Marketing Panel is now developer-only, so buttons registered under `DEBUG_CATEGORY_MARKETING` land in Special. [Details](ModdingGuide.md#dev-tools)
 - **Every mod needs a DLL with an `IMod` class.** A folder with only assets (no DLL, or no DLL implementing `IMod`) is no longer listed in the Mods menu; the console logs `[Your Mod Name] Error: ...` instead. Ship a minimal `IMod` class with asset-only mods. [Details](ModdingGuide.md#mod-assets)
 - **Stop patching `TableMaster` / `TableGroupMaster` for loot changes.** Their static dictionaries are gone; rolls now go through `LootRegistry`, which has a supported API for exactly that. [Details](ModdingGuide.md#loot-tables)
 

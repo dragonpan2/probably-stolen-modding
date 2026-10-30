@@ -12,7 +12,7 @@ Modding is a privilege extended to the community in good faith.
 ### Respect players
 
 - Do not include malicious code of any kind in your mod.
-- Do not transmit any player data.
+- Do not collect or transmit player data, except what a feature needs to work, and only while the player is using that feature (for example multiplayer sessions, speedrun leaderboards, or shared save sync).
 - Declare every capability your mod uses in `manifest.xml`, and never hide what your code does from the mod scanner (encoded payloads, reflection with computed names to reach system APIs, code loaded at runtime). A mod that does is blocked for all of its versions, on every player's machine.
 - Do not display misleading information or impersonate the base game.
 - Do not intentionally cause crashes, freezes, or performance degradation.

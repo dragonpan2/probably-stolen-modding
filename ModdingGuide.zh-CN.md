@@ -12,6 +12,9 @@ English version: [ModdingGuide.md](ModdingGuide.md)
   - [示例项目](#示例项目)
   - [用 ModLog 记录日志](#用-modlog-记录日志)
   - [开发工具](#开发工具)
+    - [用 dev.txt 启用工具](#用-devtxt-启用工具)
+    - [调试控制台（F8）](#调试控制台f8)
+    - [开发菜单（F9）](#开发菜单f9)
     - [添加你自己的调试按钮](#添加你自己的调试按钮)
   - [对存档负责](#对存档负责)
   - [已支持与不支持的模组功能](#已支持与不支持的模组功能)
@@ -114,10 +117,55 @@ namespace MyMod
 
 ## 开发工具
 
-Probably Stolen 内置了两个在开发和测试模组时必不可少的工具。
+Probably Stolen 内置了两个在开发和测试模组时必不可少的工具：
 
-- 🐛 **调试控制台（`F8`）**：打开一个显示全部日志输出的控制台，包括 `ModLog`、`Debug.Log`、警告和错误。用它确认模组已加载、观察钩子点触发，以及在出错时阅读堆栈跟踪。你的模组自己的 `Debug.Log` 和 `ModLog` 输出始终显示，模组加载器的输出也一样；游戏本身的信息日志默认隐藏，需在 **F9 > Command > Toggle Verbose Log** 中开启（警告和错误始终显示）。
-- 🛠️ **开发菜单（`F9`）**：打开一个包含许多对模组开发和测试有用的功能的菜单，例如生成物品、触发事件、查看游戏状态。用于复现边缘情况，而不必一路玩到那里。主面板分为四列：Store（商店）、Command（命令）、Spawn（生成）和 Special（特殊），上方有一个搜索栏；Special 列还能打开两个独立窗口：Modding Panel（模组工具：纸质手册编辑器、重新载入手册、资源查看器；见[纸质手册](#纸质手册)）和 Marketing Panel。
+- 🐛 **调试控制台（`F8`）**：一个命令控制台（Quantum Console），同时显示日志。用它确认模组已加载、观察钩子点触发、阅读堆栈跟踪，以及运行游戏的测试命令。
+- 🛠️ **开发菜单（`F9`）**：一个按钮面板，用于生成物品、触发事件、修改游戏状态，这样不必一路玩到那里就能复现边缘情况。你的模组可以添加自己的按钮。
+
+### 用 dev.txt 启用工具
+
+正式发布的游戏中这两个工具默认关闭，玩家不会误打开它们。启用之前，按 F8 或 F9 没有任何反应：
+
+1. 打开游戏文件夹，即放着 `Probably Stolen.exe` 和 `Mods/` 的那个文件夹。在 Steam 中：右键点击游戏，**管理 > 浏览本地文件**。
+2. 在那里新建一个名为 `dev.txt` 的空文件。Windows 默认隐藏已知的扩展名，请确认文件不是 `dev.txt.txt`（在资源管理器中开启 **查看 > 显示 > 文件扩展名**）。
+3. 启动游戏。该文件只在启动时检查一次：新建或删除之后，请重启游戏。
+
+删掉这个文件即可恢复正常游玩。其他一切都不会改变：有没有这个文件，你的存档、模组和游戏行为都一样，你的模组的玩家也永远不需要它。不要把 `dev.txt` 随模组一起发布。
+
+启动时日志中会有一行 `[DevTools]`：找到文件时为 "Developer tools enabled"，否则为 "Developer tools disabled"，并附上游戏查找的完整路径。如果按 F8 没有反应，说明控制台是关闭的，请在 `Player.log`（`%USERPROFILE%\AppData\LocalLow\Questing Goose Studio\Probably Stolen\Player.log`）中找到这一行，把路径与你放文件的位置对比。
+
+试玩版和测试版构建中根本不包含这些工具，`dev.txt` 在那里不起作用。请用完整版游戏进行开发。
+
+### 调试控制台（F8）
+
+按 `F8` 打开或关闭控制台。它显示全部日志输出：`ModLog` 和 `Debug.Log` 的消息、警告，以及带堆栈跟踪的错误。你的模组自己的输出和模组加载器的输出始终显示。游戏本身的信息日志默认隐藏，需在 **F9 > Command > Toggle Verbose Log** 中开启；警告和错误始终显示。当 `Mods/` 文件夹中的某个模组加载失败时，控制台会在启动时自动打开。
+
+输入命令后按 `Enter`。输入时按 `Tab` 在候选项之间切换，方向键可调出之前输入过的命令。控制台获得焦点时，游戏的键盘快捷键不会响应。
+
+| 命令 | 作用 |
+|---|---|
+| `help` | 控制台本身的基本帮助 |
+| `man <命令>` | 某个命令的说明和参数 |
+| `user-commands` | 游戏添加的全部命令（下面这些，以及另外几个） |
+| `all-commands` | 全部命令，包括 Quantum Console 自带的引擎级命令 |
+| `clear` | 清空控制台 |
+| `mod-scan <ID 或文件夹>` | 扫描器在模组 DLL 中发现的内容，以及该版本的指纹（[详情](#发布前自查)） |
+| `mod-trust [id]`、`mod-trust-list`、`mod-trust-list-fetch` | 这台电脑上的批准记录，以及开发者的远程名单 |
+| `loot-list [id]`、`loot-roll <id> [count]` | 掉落表及其实际概率，以及测试掷取（[详情](#在控制台中查看掉落表)） |
+| `paper-list`、`paper-open <id>`、`paper-close [id]`、`paper-reload`、`paper-edit [id]`、`paper-item <id>` | 纸质手册（[详情](#纸质手册)） |
+| `afterhour-events`、`afterhour-event-start <id> [days]`、`afterhour-event-end <id>` | 夜间地点的事件（[详情](#夜间地点)） |
+| `loc-plural-test <table> <key>`、`loc-smart-list` | 用一组数字检查某个本地化条目，以及列出使用复数格式的条目 |
+
+任何命令的确切参数都可以用 `man <命令>` 查看。`all-commands` 中的引擎级命令（销毁对象、按名称调用方法等）会直接作用于正在运行的游戏：请在测试存档上使用。
+
+### 开发菜单（F9）
+
+在一局游戏中按 `F9`（在主菜单中不起作用）。主面板分为四列：**Store**（商店）、**Command**（命令）、**Spawn**（生成）和 **Special**（特殊），上方有一个搜索栏，可按名称筛选所有按钮。测试模组时有用的几个：
+
+- **Command > Toggle Verbose Log**：在 F8 控制台中显示游戏本身的信息日志。
+- **Special > Modding Panel**：打开一个独立的模组工具窗口：纸质手册编辑器、**Reload Mod Books**、纸质精灵图选择器和资源查看器（见[纸质手册](#纸质手册)）。
+
+许多按钮会永久改变当前存档（金钱、声望、解锁内容、生成的物品）。请在不怕弄坏的存档上测试。
 
 ### 添加你自己的调试按钮
 
@@ -141,7 +189,7 @@ public void OnDisable()
 }
 ```
 
-- `AddDebugFunction(modId, category, name, action, tall = false)`：`category` 是 `ModHelper.DEBUG_CATEGORY_STORE / COMMAND / SPAWN / SPECIAL / MODDING / MARKETING` 之一（其他值会落入 Special 并给出警告）。前四个是 F9 主面板的列；`MODDING` 和 `MARKETING` 是独立窗口，从主面板 Special 列的“Modding Panel”“Marketing Panel”按钮打开。`name` 请控制在三四个词以内；过长的名称会缩小以适应按钮。
+- `AddDebugFunction(modId, category, name, action, tall = false)`：`category` 是 `ModHelper.DEBUG_CATEGORY_STORE / COMMAND / SPAWN / SPECIAL / MODDING / MARKETING` 之一（其他值会落入 Special 并给出警告）。前四个是 F9 主面板的列；`MODDING` 是独立窗口，从主面板 Special 列的“Modding Panel”按钮打开。`MARKETING` 仅为兼容保留，会落入 Special：Marketing Panel 是开发者专用窗口。`name` 请控制在三四个词以内；过长的名称会缩小以适应按钮。
 - `RemoveDebugFunctions(modId)` 移除你的模组注册的全部按钮，并返回移除的数量。
 - 你的回调抛出的异常会被捕获并记录到 F8 控制台，所以一个坏掉的按钮不会把整个菜单拖垮。
 - 受限构建中不存在 F9 菜单，这两个调用在那里不做任何事。
@@ -856,8 +904,10 @@ public void OnEnable()
         v => { fastCourier = v; PlayerPrefs.SetInt("my_mod_id.fast_courier", v ? 1 : 0); },
         tooltip: () => "Couriers arrive twice as fast.");
 
+    // 整数滑块会在滑块旁显示当前值；其他滑块只显示 valueText 格式化出来的文字（省略则不显示）。
     ModHelper.AddGameOptionSlider("my_mod_id", "settings", "spawn_rate",
-        () => "Spawn rate", () => spawnRate, v => spawnRate = v, min: 0f, max: 2f);
+        () => "Spawn rate", () => spawnRate, v => spawnRate = v, min: 0f, max: 2f,
+        valueText: v => Mathf.RoundToInt(v * 100f) + "%");
 
     ModHelper.AddGameOptionDropdown("my_mod_id", "settings", "difficulty",
         () => "Difficulty", () => new[] { "Easy", "Normal", "Hard" }, () => difficulty, i => difficulty = i);
@@ -1484,7 +1534,7 @@ public static class TweakClient
 | 模组已启用，但显示警告图标和"未加载：……" | 这次启动信任检查没有放行它。*尚未在这台电脑上批准*：选中它并点击**审核并启用**。*自你批准后已更改（原因）*：你的文件以需要重新批准的方式变化了；原因是以下之一："新版本需要新的能力"、"新版本使用了未声明的能力"、"新版本被模组扫描器拒绝"、"文件夹中包含清单未列出的 DLL"、"它现在来自与已批准副本不同的地方"或"它是另一个创意工坊物品"（本地副本与订阅之间切换）、"无法检查它的文件"（DLL 被你的编译或杀毒软件锁定）。按提示修正，再**审核并启用**。*已被开发者封禁*：该版本在远程封禁名单上。*模组加载已被开发者暂停*：面向所有人的紧急暂停，你这边无需做任何事。开发本地模组时，在详情面板打开**开发者模式**，重新编译就无需这一步。 |
 | 启用被拒绝：使用了清单未声明的能力（"uses capabilities its manifest does not declare"） | 在 F8 控制台运行 `mod-scan <id>`：每条发现都指出方法和它触及的 API。要么在 `<Capabilities>` 中声明该能力，要么改用无需能力的替代方案（见[声明能力](#声明能力)中的表格）。大多数 `reflection-external` 发现改用 `typeof(游戏类型)` 代替字符串就能消除。 |
 | 启用被拒绝：被模组扫描器拒绝（"refused by the mod scanner"），或文件夹中有清单未列出的 DLL（"DLLs in its folder that its manifest does not list"） | 一律拒绝的情况：文件夹中有未列出的 DLL，或引用了既不是游戏的也未列出的程序集；嵌入了可执行文件或加密资源；可疑的字符串常量；传入 `null` id 的 `UnpatchAll()`；针对加载器的补丁；或自带 `0Harmony`。`mod-scan` 会指出是哪一条。见[一律拒绝的情况](#一律拒绝的情况)。 |
-| 控制台中出现 `[你的模组名] Error: ...`，模组菜单中你的模组旁有警告图标 | 你的 DLL 加载失败（缺少它引用的库，或目标框架不对），某个 DLL 使用了游戏程序集的名字，或者 `Init`、`OnEnable` 或某个 Harmony 补丁抛出了异常。这一行写明了异常，后面紧跟完整的堆栈跟踪。`Mods/` 文件夹中的模组加载失败时，控制台会在启动时自动打开（创意工坊模组只显示警告图标）。该模组仍留在已启用列表中，方便你停用它。 |
+| 控制台中出现 `[你的模组名] Error: ...`，模组菜单中你的模组旁有警告图标 | 你的 DLL 加载失败（缺少它引用的库，或目标框架不对），某个 DLL 使用了游戏程序集的名字，或者 `Init`、`OnEnable` 或某个 Harmony 补丁抛出了异常。这一行写明了异常，后面紧跟完整的堆栈跟踪。`Mods/` 文件夹中的模组加载失败时，控制台会在启动时自动打开（需要 `dev.txt` 存在；创意工坊模组只显示警告图标）。该模组仍留在已启用列表中，方便你停用它。 |
 | 代码改动没有生效 | 你复制的是旧 DLL。重新构建（`dotnet build -c Release`）；用 `create-mod.bat` 创建的项目会自动安装到 `Mods\`，否则把 `bin/Release/netstandard2.1/` 中新鲜的 DLL 复制到模组文件夹。然后看一下模组菜单：重新编译会改变哈希，没有打开**开发者模式**时模组可能在等待**审核并启用**。 |
 | 我捆绑的库被拒绝，或迫使我声明能力 | 你附带的每个 DLL 都必须列在 `<Assemblies>` 中，并且会像你的代码一样被扫描。游戏已经附带的库（`0Harmony`、`Newtonsoft.Json`、Unity 程序集）完全不能捆绑；请引用游戏的副本。其他在内部使用 `Reflection.Emit` 或反射的库，会让这些能力变成你需要声明的能力。 |
 | 物品显示"未知"占位精灵图 | 传给 `SetSpriteAndShapeFromMod` 的 `spriteKey` 或模组 ID 不匹配。键是**文件名**（不含扩展名和文件夹）；ID 是你清单中的 `<ID>`，**不是**文件夹名。检查控制台中的 `item sprite(s) loaded` 数量。 |
