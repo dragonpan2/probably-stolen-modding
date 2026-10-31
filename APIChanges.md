@@ -4,6 +4,20 @@
 
 What changed in the modding API, per game update, newest on top. Within each update, entries are ordered by importance: things you must act on first, new capabilities last. Full documentation lives in [ModdingGuide.md](ModdingGuide.md).
 
+## October 31, 2026 (security update 2)
+
+**Action recommended**
+
+- **Harmony patches or reflection aimed at `PaperBookRegistry` refuse the activation.** Calling its public methods and the `ModHelper` paper functions works as before. [Details](ModdingGuide.md#hard-refusals)
+- **Book files are read and written only inside the mod folders.** `PaperBookRegistry.Save`, `LoadFile` and `ReloadFromDisk` refuse a path outside `Mods/` and your mod's own folder, or one that is not a `.json` file, and log an error instead.
+- **Another mod's data folder is read-only.** `ReadModDataFileText` / `Bytes`, `ModDataFileExists` and `ListModDataFiles` still work with any mod's id, but `WriteModDataFileText` / `Bytes` and `DeleteModDataFile` with an id other than your own throw `UnauthorizedAccessException`. [Details](ModdingGuide.md#reading-and-writing-files-without-the-capability)
+- **Approved mods are scanned again once** at the first start of this version.
+
+**New**
+
+- **Asset bundles without the `files` capability.** `ModHelper.LoadModAssetBundle(modId, relativePath)` loads a bundle from your mod folder, and only the `AssetBundle` loaders that take a path (`LoadFromFile`, `LoadFromFileAsync`, `RecompressAssetBundleAsync`) still count as `files`: `LoadFromMemory`, `LoadAsset` and the rest are free. A mod that declared `files` only for its bundle can drop it. [Details](ModdingGuide.md#reading-and-writing-files-without-the-capability)
+- **`DifficultyRules.louDemandValue`**: the Credits of goods Lou demands after her disguise visit (cozy 500, normal 750, hard 1000, challenge 1500). A difficulty registered with `AddDifficulty` copies it from its `basedOn`. The removed constant `StoreClientData.LOU_DEMAND_VALUE` is now `StoreClientData.GetLouDemandValue()`.
+
 ## October 30, 2026 (security update)
 
 **Action recommended**

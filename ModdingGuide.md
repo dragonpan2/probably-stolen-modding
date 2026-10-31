@@ -699,7 +699,7 @@ Rules:
 - **Keep it small.** The store is written with every save. Kilobytes are fine; do not stash large blobs or per-frame data in it.
 - **It is not for items.** Anything that belongs to a specific item goes on that item's tags (`item.ModifyTag` / `GetTagReadonly`), which are saved with the item and travel with it.
 
-**Files.** For data that is not per run (a cache, an export, something the player edits by hand) `ModHelper` has file helpers that need no `files` capability: `ReadModFileText` / `ReadModFileBytes` / `ModFileExists` read from your mod folder (`GetModFolder` tells you where it is), and `GetModDataFolder`, `ModDataFileExists`, `ReadModDataFileText` / `Bytes`, `WriteModDataFileText` / `Bytes`, `DeleteModDataFile` and `ListModDataFiles` read and write a folder of your own in the save location. Relative paths only. The sample and the rules are in [Reading and writing files without the capability](#reading-and-writing-files-without-the-capability).
+**Files.** For data that is not per run (a cache, an export, something the player edits by hand) `ModHelper` has file helpers that need no `files` capability: `ReadModFileText` / `ReadModFileBytes` / `ModFileExists` read from your mod folder (`GetModFolder` tells you where it is), `LoadModAssetBundle` loads an asset bundle from it, and `GetModDataFolder`, `ModDataFileExists`, `ReadModDataFileText` / `Bytes`, `WriteModDataFileText` / `Bytes`, `DeleteModDataFile` and `ListModDataFiles` read and write a folder of your own in the save location. Relative paths only. You may read another mod's data folder by passing its id, but only your own id writes or deletes. The sample and the rules are in [Reading and writing files without the capability](#reading-and-writing-files-without-the-capability).
 
 ---
 
@@ -1316,7 +1316,7 @@ The other files in your folder are checked too: executables and scripts (`.exe`,
 
 | Capability | What triggers it | Capability-free alternative |
 |---|---|---|
-| `files` | `System.IO.File`, `FileStream`, `Directory`, `FileInfo`, `DirectoryInfo`, `StreamReader` / `StreamWriter` opened on a path, `XDocument` / `XmlDocument` / `XmlReader` / `XmlWriter` given a path, `ZipFile`, memory-mapped files, the Windows `Registry`, `ScreenCapture`, `AssetBundle`, `UnityEngine.Windows.File`; Easy Save: `ES3File`, `ES3Writer`, `ES3Reader`, `ES3Directory`, `ES3` methods that take a path or two strings (key and file), `new ES3Settings(path)` and `settings.path =` (keyed `ES3.Save(key, value)` is free) | `ModHelper.GetConfig` for settings, `SetModData` for run data, `ReadModFile*` and `*ModDataFile*` for files (see below) |
+| `files` | `System.IO.File`, `FileStream`, `Directory`, `FileInfo`, `DirectoryInfo`, `StreamReader` / `StreamWriter` opened on a path, `XDocument` / `XmlDocument` / `XmlReader` / `XmlWriter` given a path, `ZipFile`, memory-mapped files, the Windows `Registry`, `ScreenCapture`, `AssetBundle.LoadFromFile` / `LoadFromFileAsync` / `RecompressAssetBundleAsync` (the rest of `AssetBundle`, including `LoadFromMemory` and `LoadAsset`, is free), `UnityEngine.Windows.File`; Easy Save: `ES3File`, `ES3Writer`, `ES3Reader`, `ES3Directory`, `ES3` methods that take a path or two strings (key and file), `new ES3Settings(path)` and `settings.path =` (keyed `ES3.Save(key, value)` is free) | `ModHelper.GetConfig` for settings, `SetModData` for run data, `ReadModFile*` and `*ModDataFile*` for files, `LoadModAssetBundle` for an asset bundle in your folder (see below) |
 | `network` | `System.Net.*` (`HttpClient`, `WebClient`, sockets; not `WebUtility` or `IPAddress`), `UnityWebRequest`, `WWW`, `Ping`, Steam HTTP and networking APIs | none, declare it |
 | `process` | `Application.OpenURL` with a literal `http://` or `https://` address (a link to your mod's page or documentation). Starting programs is never allowed, see below | `SteamFriends.ActivateGameOverlayToWebPage` under `steam` opens the link in the overlay instead |
 | `dynamic-code` | `Assembly.Load*`, `AppDomain.Load`, `Reflection.Emit`, `Activator.CreateInstanceFrom`, `Activator.CreateInstance(assemblyName, ...)`, compiling expression trees (`Expression.Compile()`), `BinaryFormatter` and the other `Formatters` deserialisers, `CSharpCodeProvider` | none, declare it |
@@ -1337,7 +1337,7 @@ Some patterns refuse the activation whatever the manifest says, because no legit
 - string constants pointing at browser profiles, Steam login files, Discord data or crypto wallets;
 - a string constant of 1024 or more base64 characters (a hidden payload);
 - `Harmony.UnpatchAll()` with a literal `null` id, or any `Unpatch*` call with the id `"*"` (they remove every mod's patches, the game's own fixes included). Note that `harmony.Unpatch(original, HarmonyPatchType.All)` uses `"*"` by default: pass your own id, `harmony.Unpatch(original, HarmonyPatchType.All, harmony.Id)`. An id starting with `dse.` (the game's own patches) is refused as well;
-- Harmony patches or reflection aimed at the game's mod loader or trust code: `ModLoader`, `ModTrust`, `ModTrustRecord`, `ModFingerprint`, `ModTrustList`, `ModScanner`, `ModCapability`, `ModSecurityDebug`, `ModSteamRules`, `ModSteamGuard`, `ModWorkshop`, `SteamManager`, or at the Steamworks types `SteamUGC`, `SteamRemoteStorage`, `SteamUser`, `SteamFriends`, `SteamMatchmaking`, `SteamAPI`, `SteamClient`, `SteamGameServer*` and the bindings behind them;
+- Harmony patches or reflection aimed at the game's mod loader or trust code: `ModLoader`, `ModTrust`, `ModTrustRecord`, `ModFingerprint`, `ModTrustList`, `ModScanner`, `ModCapability`, `ModSecurityDebug`, `ModSteamRules`, `ModSteamGuard`, `ModWorkshop`, `SteamManager`, `PaperBookRegistry`, or at the Steamworks types `SteamUGC`, `SteamRemoteStorage`, `SteamUser`, `SteamFriends`, `SteamMatchmaking`, `SteamAPI`, `SteamClient`, `SteamGameServer*` and the bindings behind them;
 - `ES3` writes on the keys that hold the player's approvals and mod order (`modTrust`, `modOrder`, `workshopOwners`, the disclaimer key); reading them is fine;
 - publishing or changing Steam Workshop items or Steam Cloud files from the game: every `SteamUGC` method that creates, updates, deletes, subscribes, downloads or unsubscribes an item (`CreateItem`, `StartItemUpdate`, `SetItem*`, `SubmitItemUpdate`, ...), and every `SteamRemoteStorage` write. Mods are published by their authors with steamcmd, never by the game on a player's account;
 - account access: `SteamUser` authentication and encrypted app tickets, store sign-in URLs and voice, `SteamFriends` and `SteamMatchmaking` chat messages and invites, `SteamAPI` (except `IsSteamRunning`), `SteamClient`, the game server APIs, a `DllImport` into a Steam library, and string constants naming Steam's native library files (`steam_api64.dll`) or their exported functions. The game also blocks these calls while it runs: a mod caught making one is stopped, deactivated, and that version can no longer be activated on that computer;
@@ -1377,6 +1377,7 @@ While you work on a local mod (in `Mods/`), every rebuild changes the hashes. On
 string notes = ModHelper.ReadModFileText("my_mod_id", "Data/notes.txt");      // null when missing
 byte[] blob  = ModHelper.ReadModFileBytes("my_mod_id", "Data/table.bin");
 bool has     = ModHelper.ModFileExists("my_mod_id", "Data/notes.txt");
+AssetBundle bundle = ModHelper.LoadModAssetBundle("my_mod_id", "Bundles/props"); // null when missing
 
 // Read and write: a folder of your own in the save location (persistentDataPath/ModData/my_mod_id/).
 ModHelper.WriteModDataFileText("my_mod_id", "cache/prices.json", json);
@@ -1386,7 +1387,13 @@ List<string> files = ModHelper.ListModDataFiles("my_mod_id");
 string folder = ModHelper.GetModDataFolder("my_mod_id");                      // the folder itself, if you need to show it
 ```
 
-A path that is absolute, empty or escapes the folder (`../`) throws `ArgumentException`. Do not write into your mod folder: Steam overwrites Workshop folders on every update. For values tied to a run, `SetModData` is still the right tool (see [Saving Mod Data](#saving-mod-data)); for settings, [Mod Configuration](#mod-configuration).
+A path that is absolute, empty or escapes the folder (`../`) throws `ArgumentException`. Do not write into your mod folder: Steam overwrites Workshop folders on every update.
+
+`LoadModAssetBundle` replaces `AssetBundle.LoadFromFile`, which counts as the `files` capability. Unity returns null for a bundle that is already loaded, so keep the one you got and call `bundle.Unload(...)` when you are done with it.
+
+Another mod's data folder is read-only: pass its id to `ReadModDataFileText` / `Bytes`, `ModDataFileExists` or `ListModDataFiles` to read what it shares, but `WriteModDataFileText` / `Bytes` and `DeleteModDataFile` throw `UnauthorizedAccessException` unless the id is your own. The folder name turns dots into underscores and ignores case, so when two installed mods' ids land on the same folder (`my.mod` and `my_mod`), only the id spelled exactly like the folder name may write there.
+
+For values tied to a run, `SetModData` is still the right tool (see [Saving Mod Data](#saving-mod-data)); for settings, [Mod Configuration](#mod-configuration).
 
 ---
 

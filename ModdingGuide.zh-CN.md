@@ -699,7 +699,7 @@ ModHelper.ClearModData("my_mod_id");     // 清除你的模组在本局中存的
 - **保持小巧。** 这个存储在每次保存时都会写入。几 KB 没问题；不要往里塞大块数据或每帧的数据。
 - **它不是用来存物品数据的。** 属于某个特定物品的东西应放在该物品的标签上（`item.ModifyTag` / `GetTagReadonly`），它们随物品保存并跟随物品移动。
 
-**文件。** 对于不按局保存的数据（缓存、导出、玩家手动编辑的东西），`ModHelper` 提供了无需 `files` 能力的文件辅助方法：`ReadModFileText` / `ReadModFileBytes` / `ModFileExists` 读取你的模组文件夹（`GetModFolder` 告诉你它在哪里）；`GetModDataFolder`、`ModDataFileExists`、`ReadModDataFileText` / `Bytes`、`WriteModDataFileText` / `Bytes`、`DeleteModDataFile` 和 `ListModDataFiles` 读写存档位置下属于你的文件夹。只接受相对路径。示例和规则见[不声明能力也能读写文件](#不声明能力也能读写文件)。
+**文件。** 对于不按局保存的数据（缓存、导出、玩家手动编辑的东西），`ModHelper` 提供了无需 `files` 能力的文件辅助方法：`ReadModFileText` / `ReadModFileBytes` / `ModFileExists` 读取你的模组文件夹（`GetModFolder` 告诉你它在哪里），`LoadModAssetBundle` 从中加载资源包；`GetModDataFolder`、`ModDataFileExists`、`ReadModDataFileText` / `Bytes`、`WriteModDataFileText` / `Bytes`、`DeleteModDataFile` 和 `ListModDataFiles` 读写存档位置下属于你的文件夹。只接受相对路径。传入别的模组的 id 可以读取它的数据文件夹，但只有你自己的 id 能写入或删除。示例和规则见[不声明能力也能读写文件](#不声明能力也能读写文件)。
 
 ---
 
@@ -1315,7 +1315,7 @@ public class MyMod : IMod
 
 | 能力 | 触发条件 | 无需能力的替代方案 |
 |---|---|---|
-| `files` | `System.IO.File`、`FileStream`、`Directory`、`FileInfo`、`DirectoryInfo`、以路径打开的 `StreamReader` / `StreamWriter`、传入路径的 `XDocument` / `XmlDocument` / `XmlReader` / `XmlWriter`、`ZipFile`、内存映射文件、Windows 注册表（`Registry`）、`ScreenCapture`、`AssetBundle`、`UnityEngine.Windows.File`；Easy Save：`ES3File`、`ES3Writer`、`ES3Reader`、`ES3Directory`、带路径或两个字符串（键和文件）的 `ES3` 方法、`new ES3Settings(path)` 和 `settings.path =`（按键的 `ES3.Save(key, value)` 是免费的） | 设置用 `ModHelper.GetConfig`，局内数据用 `SetModData`，文件用 `ReadModFile*` 和 `*ModDataFile*`（见下文） |
+| `files` | `System.IO.File`、`FileStream`、`Directory`、`FileInfo`、`DirectoryInfo`、以路径打开的 `StreamReader` / `StreamWriter`、传入路径的 `XDocument` / `XmlDocument` / `XmlReader` / `XmlWriter`、`ZipFile`、内存映射文件、Windows 注册表（`Registry`）、`ScreenCapture`、`AssetBundle.LoadFromFile` / `LoadFromFileAsync` / `RecompressAssetBundleAsync`（`AssetBundle` 的其余成员，包括 `LoadFromMemory` 和 `LoadAsset`，是免费的）、`UnityEngine.Windows.File`；Easy Save：`ES3File`、`ES3Writer`、`ES3Reader`、`ES3Directory`、带路径或两个字符串（键和文件）的 `ES3` 方法、`new ES3Settings(path)` 和 `settings.path =`（按键的 `ES3.Save(key, value)` 是免费的） | 设置用 `ModHelper.GetConfig`，局内数据用 `SetModData`，文件用 `ReadModFile*` 和 `*ModDataFile*`，模组文件夹里的资源包用 `LoadModAssetBundle`（见下文） |
 | `network` | `System.Net.*`（`HttpClient`、`WebClient`、套接字；`WebUtility` 和 `IPAddress` 除外）、`UnityWebRequest`、`WWW`、`Ping`、Steam 的 HTTP 与网络 API | 无，请声明 |
 | `process` | 参数为字面 `http://` 或 `https://` 网址的 `Application.OpenURL`（指向你的模组页面或文档的链接）。启动程序永远不被允许，见下文 | `steam` 能力下的 `SteamFriends.ActivateGameOverlayToWebPage` 可改为在游戏内覆盖界面中打开链接 |
 | `dynamic-code` | `Assembly.Load*`、`AppDomain.Load`、`Reflection.Emit`、`Activator.CreateInstanceFrom`、`Activator.CreateInstance(assemblyName, ...)`、编译表达式树（`Expression.Compile()`）、`BinaryFormatter` 及其他 `Formatters` 反序列化器、`CSharpCodeProvider` | 无，请声明 |
@@ -1336,7 +1336,7 @@ public class MyMod : IMod
 - 指向浏览器配置、Steam 登录文件、Discord 数据或加密货币钱包的字符串常量；
 - 1024 个或更多 base64 字符组成的字符串常量（隐藏的载荷）；
 - 传入字面 `null` id 的 `Harmony.UnpatchAll()`，或 id 为 `"*"` 的任何 `Unpatch*` 调用（它们会移除所有模组的补丁，包括游戏自己的修复）。注意 `harmony.Unpatch(original, HarmonyPatchType.All)` 默认使用 `"*"`：请传入你自己的 id，即 `harmony.Unpatch(original, HarmonyPatchType.All, harmony.Id)`。以 `dse.` 开头的 id（游戏自己的补丁）同样会被拒绝；
-- 针对游戏模组加载器或信任代码的 Harmony 补丁或反射：`ModLoader`、`ModTrust`、`ModTrustRecord`、`ModFingerprint`、`ModTrustList`、`ModScanner`、`ModCapability`、`ModSecurityDebug`、`ModSteamRules`、`ModSteamGuard`、`ModWorkshop`、`SteamManager`，或针对 Steamworks 类型 `SteamUGC`、`SteamRemoteStorage`、`SteamUser`、`SteamFriends`、`SteamMatchmaking`、`SteamAPI`、`SteamClient`、`SteamGameServer*` 及其背后的绑定；
+- 针对游戏模组加载器或信任代码的 Harmony 补丁或反射：`ModLoader`、`ModTrust`、`ModTrustRecord`、`ModFingerprint`、`ModTrustList`、`ModScanner`、`ModCapability`、`ModSecurityDebug`、`ModSteamRules`、`ModSteamGuard`、`ModWorkshop`、`SteamManager`、`PaperBookRegistry`，或针对 Steamworks 类型 `SteamUGC`、`SteamRemoteStorage`、`SteamUser`、`SteamFriends`、`SteamMatchmaking`、`SteamAPI`、`SteamClient`、`SteamGameServer*` 及其背后的绑定；
 - 对保存玩家批准记录和模组顺序的键（`modTrust`、`modOrder`、`workshopOwners`、免责声明的键）进行的 `ES3` 写入；读取它们没有问题；
 - 从游戏中发布或修改 Steam 创意工坊物品或 Steam 云文件：`SteamUGC` 中所有创建、更新、删除、订阅、下载或取消订阅物品的方法（`CreateItem`、`StartItemUpdate`、`SetItem*`、`SubmitItemUpdate` 等），以及所有 `SteamRemoteStorage` 写入。模组由作者用 steamcmd 发布，绝不由游戏通过玩家的账户发布；
 - 账户访问：`SteamUser` 身份验证和加密应用票证、商店登录 URL 和语音，`SteamFriends` 和 `SteamMatchmaking` 的聊天消息和邀请，`SteamAPI`（`IsSteamRunning` 除外）、`SteamClient`、游戏服务器 API、对 Steam 库的 `DllImport`，以及指向 Steam 原生库文件（`steam_api64.dll`）或其导出函数的字符串常量。游戏运行时也会拦截这些调用：被发现这样做的模组会被停止并停用，该版本在这台电脑上再也无法启用；
@@ -1376,6 +1376,7 @@ public class MyMod : IMod
 string notes = ModHelper.ReadModFileText("my_mod_id", "Data/notes.txt");      // 不存在时返回 null
 byte[] blob  = ModHelper.ReadModFileBytes("my_mod_id", "Data/table.bin");
 bool has     = ModHelper.ModFileExists("my_mod_id", "Data/notes.txt");
+AssetBundle bundle = ModHelper.LoadModAssetBundle("my_mod_id", "Bundles/props"); // 不存在时返回 null
 
 // 读写：存档位置下属于你的文件夹（persistentDataPath/ModData/my_mod_id/）。
 ModHelper.WriteModDataFileText("my_mod_id", "cache/prices.json", json);
@@ -1385,7 +1386,13 @@ List<string> files = ModHelper.ListModDataFiles("my_mod_id");
 string folder = ModHelper.GetModDataFolder("my_mod_id");                      // 需要展示路径时用
 ```
 
-绝对路径、空路径或逃出文件夹的路径（`../`）会抛出 `ArgumentException`。不要往模组文件夹里写入：Steam 每次更新都会覆盖创意工坊文件夹。与一局游戏绑定的数值仍应使用 `SetModData`（见[保存模组数据](#保存模组数据)）；设置请用[模组配置](#模组配置)。
+绝对路径、空路径或逃出文件夹的路径（`../`）会抛出 `ArgumentException`。不要往模组文件夹里写入：Steam 每次更新都会覆盖创意工坊文件夹。
+
+`LoadModAssetBundle` 用来代替 `AssetBundle.LoadFromFile`，后者算作 `files` 能力。对已经加载的资源包，Unity 会返回 null，所以请保留拿到的那个，用完后调用 `bundle.Unload(...)`。
+
+其他模组的数据文件夹是只读的：把它的 id 传给 `ReadModDataFileText` / `Bytes`、`ModDataFileExists` 或 `ListModDataFiles` 可以读取它共享的内容，但 `WriteModDataFileText` / `Bytes` 和 `DeleteModDataFile` 只接受你自己的 id，否则抛出 `UnauthorizedAccessException`。文件夹名会把点换成下划线并且不区分大小写，所以当两个已安装模组的 id 落到同一个文件夹（`my.mod` 和 `my_mod`）时，只有拼写与文件夹名完全一致的 id 才能写入。
+
+与一局游戏绑定的数值仍应使用 `SetModData`（见[保存模组数据](#保存模组数据)）；设置请用[模组配置](#模组配置)。
 
 ---
 

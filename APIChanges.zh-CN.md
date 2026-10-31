@@ -4,6 +4,20 @@ English version: [APIChanges.md](APIChanges.md)
 
 按游戏更新记录模组 API 的变化，最新的在最上面。每次更新内部按重要性排序：需要你立即处理的在前，新增能力在后。完整文档见 [ModdingGuide.zh-CN.md](ModdingGuide.zh-CN.md)。
 
+## 2026 年 10 月 31 日（安全更新 2）
+
+**建议处理**
+
+- **针对 `PaperBookRegistry` 的 Harmony 补丁或反射会导致启用被拒绝。** 调用它的公开方法以及 `ModHelper` 的纸张相关函数不受影响。[详情](ModdingGuide.zh-CN.md#一律拒绝的情况)
+- **书本文件只能在模组文件夹内读写。** `PaperBookRegistry.Save`、`LoadFile` 和 `ReloadFromDisk` 会拒绝 `Mods/` 和你自己模组文件夹以外的路径，以及不是 `.json` 文件的路径，并改为记录一条错误。
+- **其他模组的数据文件夹为只读。** `ReadModDataFileText` / `Bytes`、`ModDataFileExists` 和 `ListModDataFiles` 仍可使用任何模组的 id，但用别的模组的 id 调用 `WriteModDataFileText` / `Bytes` 和 `DeleteModDataFile` 会抛出 `UnauthorizedAccessException`。[详情](ModdingGuide.zh-CN.md#不声明能力也能读写文件)
+- **已批准的模组会在此版本首次启动时重新扫描一次。**
+
+**新增**
+
+- **无需 `files` 能力即可使用资源包。** `ModHelper.LoadModAssetBundle(modId, relativePath)` 从你的模组文件夹加载资源包；只有接受路径的 `AssetBundle` 加载方法（`LoadFromFile`、`LoadFromFileAsync`、`RecompressAssetBundleAsync`）仍算作 `files`，`LoadFromMemory`、`LoadAsset` 等其余成员是免费的。只为资源包声明了 `files` 的模组可以去掉它。[详情](ModdingGuide.zh-CN.md#不声明能力也能读写文件)
+- **`DifficultyRules.louDemandValue`**：Lou 在伪装来访之后索要的物资价值（信用点），休闲 500、普通 750、困难 1000、挑战 1500。用 `AddDifficulty` 注册的难度会从其 `basedOn` 复制这个值。已移除的常量 `StoreClientData.LOU_DEMAND_VALUE` 改为 `StoreClientData.GetLouDemandValue()`。
+
 ## 2026 年 10 月 30 日（安全更新）
 
 **建议处理**
