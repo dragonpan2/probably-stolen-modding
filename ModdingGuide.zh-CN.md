@@ -1305,7 +1305,9 @@ public class MyMod : IMod
 4. 代码中没有下文[一律拒绝的情况](#一律拒绝的情况)；
 5. 你的代码触及的一切都被清单中的 `<Capabilities>` 元素覆盖。
 
-批准会记录清单和所列 DLL 的哈希。此后只要文件仍然一致，或者变化了但没有新增能力，模组就会在每次启动时加载。
+批准会记录清单和所列 DLL 的哈希。此后只要文件仍然一致，或者变化了但没有新增能力，模组就会在每次启动时加载。当游戏更新收紧了扫描器的规则时，已批准的模组会在下次启动时重新扫描一次，即使文件没有变化。
+
+文件夹中的其他文件也会被检查：任何名称下的可执行文件和脚本（`.exe`、`.bat`、`.ps1`、`.js`、`.lnk`、未列出的 DLL 等），以及看起来经过加密或压缩的未知格式文件。图片、声音（包括 FLAC）、视频（MP4、WebM）、任何文本文件、字体、PDB 调试符号和 Unity 资源包都没问题，也没有大小限制（超过 50,000 个文件的文件夹会被拒绝，这样检查不至于花上几分钟）。本地模组文件夹中以点开头的文件夹（`.git`、`.vs`、`.idea`）会被跳过，所以在工作副本里保留仓库没有问题；创意工坊物品会被完整检查，所以不要把它们上传。发布的文件夹中不要放 zip 压缩包、安装程序和美术源文件（`.psd`、`.aseprite`）。
 
 ### 声明能力
 
@@ -1315,10 +1317,11 @@ public class MyMod : IMod
 |---|---|---|
 | `files` | `System.IO.File`、`FileStream`、`Directory`、`FileInfo`、`DirectoryInfo`、以路径打开的 `StreamReader` / `StreamWriter`、传入路径的 `XDocument` / `XmlDocument` / `XmlReader` / `XmlWriter`、`ZipFile`、内存映射文件、Windows 注册表（`Registry`）、`ScreenCapture`、`AssetBundle`、`UnityEngine.Windows.File`；Easy Save：`ES3File`、`ES3Writer`、`ES3Reader`、`ES3Directory`、带路径或两个字符串（键和文件）的 `ES3` 方法、`new ES3Settings(path)` 和 `settings.path =`（按键的 `ES3.Save(key, value)` 是免费的） | 设置用 `ModHelper.GetConfig`，局内数据用 `SetModData`，文件用 `ReadModFile*` 和 `*ModDataFile*`（见下文） |
 | `network` | `System.Net.*`（`HttpClient`、`WebClient`、套接字；`WebUtility` 和 `IPAddress` 除外）、`UnityWebRequest`、`WWW`、`Ping`、Steam 的 HTTP 与网络 API | 无，请声明 |
-| `process` | `System.Diagnostics.Process`、`ProcessStartInfo`、`Application.OpenURL`（它调用 ShellExecute，可以启动程序） | 无，请声明 |
+| `process` | 参数为字面 `http://` 或 `https://` 网址的 `Application.OpenURL`（指向你的模组页面或文档的链接）。启动程序永远不被允许，见下文 | `steam` 能力下的 `SteamFriends.ActivateGameOverlayToWebPage` 可改为在游戏内覆盖界面中打开链接 |
 | `dynamic-code` | `Assembly.Load*`、`AppDomain.Load`、`Reflection.Emit`、`Activator.CreateInstanceFrom`、`Activator.CreateInstance(assemblyName, ...)`、编译表达式树（`Expression.Compile()`）、`BinaryFormatter` 及其他 `Formatters` 反序列化器、`CSharpCodeProvider` | 无，请声明 |
 | `native` | `DllImport`、`unsafe` 代码与指针、`calli`、`Marshal`、`UnsafeUtility` | 无，请声明 |
 | `reflection-external` | `Type.GetType`、`GetMethod` / `GetField` / `GetProperty` / `InvokeMember`、`Assembly.GetType` / `GetTypes`、使用**拼接出的**名称或类型的 `AccessTools` 或 `Traverse`，或者字面名称位于 `System.`、`UnityEngine.`、`HarmonyLib.`、`Steamworks.`、`ES3` 之下；C# 的 `dynamic` 关键字（它编译为运行时绑定器） | 用 `typeof(GameItem)` 或游戏类型的字面名称反射游戏类型：这是免费的 |
+| `steam` | 通过玩家的 Steam 会话调用任何 Steamworks.NET API：`SteamUserStats`、`SteamFriends`、`SteamUtils`、`SteamApps`、`SteamUser.GetSteamID`、`SteamUGC` 上的创意工坊查询、`Callback<T>` / `CallResult<T>`。`CSteamID`、`PublishedFileId_t` 等结构体和枚举是免费的。创意工坊写入、账户令牌和聊天永远不被允许（见下文） | 游戏已经通过 `ModWorkshop` 和模组菜单处理创意工坊；其他情况没有替代，请声明 |
 
 只有游戏自己的类型（`Assembly-CSharp`）和你自己的类型可以自由反射。扫描器会沿 IL 回溯到产生类型或名称的那条指令；无法判断时（值来自变量、分支、方法调用）按"拼接"处理，所以请优先写 `AccessTools.Method(typeof(PlayerStore), "ModCash")` 而不是用字符串拼出的 `AccessTools.Method("PlayerStore:ModCash")`，优先用 `typeof(X)` 而不是 `someObject.GetType()`。
 
@@ -1328,11 +1331,15 @@ public class MyMod : IMod
 
 有些模式无论清单怎么写都会拒绝启用，因为正常模组不需要它们：
 
+- 启动其他程序：代码中任何位置的 `System.Diagnostics.Process` 和 `ProcessStartInfo`，以及参数不是字面网址（拼接出的字符串、文件路径、其他协议）的 `Application.OpenURL`。游戏运行时也会拦截来自模组代码的 `Process.Start`：被发现这样做的模组会被停止并停用，该版本在这台电脑上再也无法启用。任何能力提示都无法让这种行为变得安全，所以这个调用直接被拒绝；
 - 嵌入资源是可执行文件，或任何看起来像加密数据的资源（高熵且不是已知的图片、音频、文本或 `.resources` 格式）；
 - 指向浏览器配置、Steam 登录文件、Discord 数据或加密货币钱包的字符串常量；
 - 1024 个或更多 base64 字符组成的字符串常量（隐藏的载荷）；
-- 传入字面 `null` id 的 `Harmony.UnpatchAll()`（它会移除所有模组的补丁，包括游戏自己的修复）；
-- 针对游戏模组加载器或信任代码的 Harmony 补丁或反射：`ModLoader`、`ModTrust`、`ModTrustRecord`、`ModFingerprint`、`ModTrustList`、`ModScanner`、`ModCapability`、`ModSecurityDebug`；
+- 传入字面 `null` id 的 `Harmony.UnpatchAll()`，或 id 为 `"*"` 的任何 `Unpatch*` 调用（它们会移除所有模组的补丁，包括游戏自己的修复）。注意 `harmony.Unpatch(original, HarmonyPatchType.All)` 默认使用 `"*"`：请传入你自己的 id，即 `harmony.Unpatch(original, HarmonyPatchType.All, harmony.Id)`。以 `dse.` 开头的 id（游戏自己的补丁）同样会被拒绝；
+- 针对游戏模组加载器或信任代码的 Harmony 补丁或反射：`ModLoader`、`ModTrust`、`ModTrustRecord`、`ModFingerprint`、`ModTrustList`、`ModScanner`、`ModCapability`、`ModSecurityDebug`、`ModSteamRules`、`ModSteamGuard`、`ModWorkshop`、`SteamManager`，或针对 Steamworks 类型 `SteamUGC`、`SteamRemoteStorage`、`SteamUser`、`SteamFriends`、`SteamMatchmaking`、`SteamAPI`、`SteamClient`、`SteamGameServer*` 及其背后的绑定；
+- 对保存玩家批准记录和模组顺序的键（`modTrust`、`modOrder`、`workshopOwners`、免责声明的键）进行的 `ES3` 写入；读取它们没有问题；
+- 从游戏中发布或修改 Steam 创意工坊物品或 Steam 云文件：`SteamUGC` 中所有创建、更新、删除、订阅、下载或取消订阅物品的方法（`CreateItem`、`StartItemUpdate`、`SetItem*`、`SubmitItemUpdate` 等），以及所有 `SteamRemoteStorage` 写入。模组由作者用 steamcmd 发布，绝不由游戏通过玩家的账户发布；
+- 账户访问：`SteamUser` 身份验证和加密应用票证、商店登录 URL 和语音，`SteamFriends` 和 `SteamMatchmaking` 的聊天消息和邀请，`SteamAPI`（`IsSteamRunning` 除外）、`SteamClient`、游戏服务器 API、对 Steam 库的 `DllImport`，以及指向 Steam 原生库文件（`steam_api64.dll`）或其导出函数的字符串常量。游戏运行时也会拦截这些调用：被发现这样做的模组会被停止并停用，该版本在这台电脑上再也无法启用；
 - 自带 `0Harmony`、MonoMod 或 Cecil，或任何与游戏程序集同名的 DLL（包括游戏已经附带的库，例如 `Newtonsoft.Json`）。请引用游戏自带的副本；
 - 文件夹中有 `<Assemblies>` 未列出的 DLL，或者所列 DLL 引用了既不是游戏的、也未列出的程序集。运行时会不经扫描直接从你的文件夹加载这种文件，所以整个模组会被拒绝，直到清单把它列出来；
 - 扫描器无法读取的 DLL：无法解析的方法体或 `[HarmonyPatch]` 特性会导致模组被拒绝，而不是被跳过。
@@ -1341,7 +1348,7 @@ public class MyMod : IMod
 
 ### 发布前自查
 
-打开控制台（F8），运行 `mod-scan <你的模组ID>`（任何已列出的模组，启用与否均可）或 `mod-scan <文件夹路径>`。它会打印所列程序集、文件夹中未列出的 DLL、扫描了多少方法、清单声明的能力（`declared`）、扫描器检测到的能力（`detected`）、每条发现（格式为 `能力: 类型.方法 -> 引用了什么`）、所有一律拒绝的标记、某个 DLL 无法读取时的 `ERROR:` 行，以及一行 `fingerprint:`，即这个确切版本的哈希，批准记录和开发者名单引用的就是它。修改清单直到 `declared` 覆盖 `detected` 且没有一律拒绝的标记。如果某条发现出乎意料，方法名告诉你该看哪里；大多数 `reflection-external` 发现改用 `typeof(...)` 就能消除。
+打开控制台（F8），运行 `mod-scan <你的模组ID>`（任何已列出的模组，启用与否均可）或 `mod-scan <文件夹路径>`。它会打印所列程序集、文件夹中未列出的 DLL、扫描了多少方法、清单声明的能力（`declared`）、扫描器检测到的能力（`detected`）、每条发现（格式为 `能力: 类型.方法 -> 引用了什么`）、所有一律拒绝的标记、某个 DLL 无法读取时的 `ERROR:` 行，以及一行 `fingerprint:`，即这个确切版本的哈希，批准记录和开发者名单引用的就是它，后面是每个所列 DLL 的哈希。修改清单直到 `declared` 覆盖 `detected` 且没有一律拒绝的标记。如果某条发现出乎意料，方法名告诉你该看哪里；大多数 `reflection-external` 发现改用 `typeof(...)` 就能消除。
 
 像玩家一样测试时还有两个有用的命令：`mod-trust` 列出这台电脑上记录的批准（哈希、能力、开发者模式，创意工坊模组还有物品和发布者 id）以及本次会话中每个模组的信任状态；`mod-trust-list` 显示开发者远程名单的状态。F8 控制台是 Quantum Console：`user-commands` 列出游戏自己的命令（`loot-list`、`mod-scan` 等），`all-commands` 列出全部命令，包括引擎级的。
 

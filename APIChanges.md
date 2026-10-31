@@ -4,6 +4,16 @@
 
 What changed in the modding API, per game update, newest on top. Within each update, entries are ordered by importance: things you must act on first, new capabilities last. Full documentation lives in [ModdingGuide.md](ModdingGuide.md).
 
+## October 30, 2026 (security update)
+
+**Action recommended**
+
+- **Starting programs is never allowed.** `System.Diagnostics.Process` / `ProcessStartInfo` refuse the activation whatever the manifest says, and the game blocks `Process.Start` from mod code at runtime (the mod is stopped and deactivated). The `process` capability now covers only `Application.OpenURL` with a literal `http://` or `https://` address, and the player sees it as "Open web links in your browser". [Details](ModdingGuide.md#hard-refusals)
+- **Steam API use is the new `steam` capability, and some Steam calls are never allowed.** Achievements, friends, overlay, Workshop queries and other Steamworks calls must be declared as `<Capability>steam</Capability>`. Creating, updating, deleting, subscribing or downloading Workshop items, Steam Cloud writes, authentication tickets, chat messages and invites, `SteamAPI` / `SteamClient`, and a `DllImport` into Steam refuse the activation whatever the manifest says, and the game blocks those calls at runtime: a mod caught making one is stopped and deactivated. Publish with steamcmd as before. [Details](ModdingGuide.md#hard-refusals)
+- **Your whole mod folder is scanned, not only the DLLs.** Executables and scripts under any name, and files of unknown format that look encrypted or compressed, refuse the activation; images, sounds, text, fonts and PDBs are fine. Remove zips, installers and source art from what you publish. There is no size limit. [Details](ModdingGuide.md#capabilities-and-the-scanner)
+- **Pass your own id to `Harmony.Unpatch`.** `Unpatch(original, type)` defaults to the id `"*"` (every owner) and is now refused; write `harmony.Unpatch(original, type, harmony.Id)`.
+- **Approved mods are scanned again once** at the first start of this version, so a mod that relied on one of these calls stops loading until its author updates it.
+
 ## October 2026 (1.0 release)
 
 **Action recommended**

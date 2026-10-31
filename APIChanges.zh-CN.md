@@ -4,6 +4,16 @@ English version: [APIChanges.md](APIChanges.md)
 
 按游戏更新记录模组 API 的变化，最新的在最上面。每次更新内部按重要性排序：需要你立即处理的在前，新增能力在后。完整文档见 [ModdingGuide.zh-CN.md](ModdingGuide.zh-CN.md)。
 
+## 2026 年 10 月 30 日（安全更新）
+
+**建议处理**
+
+- **启动程序永远不被允许。** `System.Diagnostics.Process` / `ProcessStartInfo` 无论清单怎么写都会导致启用被拒绝，游戏运行时也会拦截来自模组代码的 `Process.Start`（模组会被停止并停用）。`process` 能力现在只涵盖参数为字面 `http://` 或 `https://` 网址的 `Application.OpenURL`，玩家看到的说明是"在浏览器中打开网页链接"。[详情](ModdingGuide.zh-CN.md#一律拒绝的情况)
+- **使用 Steam API 现在属于新的 `steam` 能力，而且有些 Steam 调用永远不被允许。** 成就、好友、游戏内覆盖界面、创意工坊查询等 Steamworks 调用必须声明为 `<Capability>steam</Capability>`。创建、更新、删除、订阅或下载创意工坊物品，Steam 云写入，身份验证票证，聊天消息和邀请，`SteamAPI` / `SteamClient`，以及对 Steam 的 `DllImport`，无论清单怎么写都会导致启用被拒绝；游戏运行时也会拦截这些调用，被发现这样做的模组会被停止并停用。发布方式不变，仍使用 steamcmd。[详情](ModdingGuide.zh-CN.md#一律拒绝的情况)
+- **扫描的是整个模组文件夹，而不只是 DLL。** 任何名称下的可执行文件和脚本，以及看起来经过加密或压缩的未知格式文件，都会导致启用被拒绝；图片、声音、文本、字体和 PDB 没有问题。发布内容中请去掉 zip、安装程序和美术源文件。没有大小限制。[详情](ModdingGuide.zh-CN.md#能力声明与扫描器)
+- **向 `Harmony.Unpatch` 传入你自己的 id。** `Unpatch(original, type)` 默认使用 id `"*"`（所有补丁所有者），现在会被拒绝；请写成 `harmony.Unpatch(original, type, harmony.Id)`。
+- **已批准的模组会在此版本首次启动时重新扫描一次**，因此依赖上述调用的模组会停止加载，直到作者更新它。
+
 ## 2026 年 10 月（1.0 正式版）
 
 **建议处理**
