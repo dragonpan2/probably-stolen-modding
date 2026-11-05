@@ -61,6 +61,7 @@ English version: [ModdingGuide.md](ModdingGuide.md)
     - [玩家看到什么](#玩家看到什么)
     - [开发者模式](#开发者模式)
     - [不声明能力也能读写文件](#不声明能力也能读写文件)
+    - [向你的服务器证明玩家的 Steam 身份](#向你的服务器证明玩家的-steam-身份)
   - [Steam 创意工坊](#steam-创意工坊)
     - [用 steamcmd 发布](#用-steamcmd-发布)
   - [Harmony 补丁](#harmony-补丁)
@@ -930,7 +931,7 @@ public void OnDisable()
 - **标签、提示和下拉选项都是函数**，每次窗口打开时重新求值，所以 `() => ModHelper.GetLocalized(...)` 能跟随语言切换。提供 tooltip 会在标签旁加一个信息图标。
 - **ID 有命名空间。** `optionId` 和你自己的分区 ID 在内部都会加上模组 ID 前缀，因此不会与其他模组冲突。重复注册同一个 ID 会替换之前的条目。`RemoveGameOption(modId, optionId)` 和 `RemoveGameOptions(modId)` 可以再移除它们。`ModHelper.GameOptionId(modId, optionId)` 返回游戏内部使用的带前缀 id（`"modId:optionId"`），用于极少数需要按完整 id 匹配条目的场合。
 - **顺序**为分区内的注册顺序；你的分区排在内置分区之后。
-- **按键绑定**会拒绝 Escape 以及窗口中其他绑定行已占用的按键（数字键仍可绑定），且只能捕获键盘按键。玩家选择按键期间，游戏自己的快捷键保持静默；你的也应如此：`KeyBindHelper.SuppressHotkeys` 为 true 时跳过轮询。
+- **按键绑定**会拒绝 Escape、鼠标左键以及窗口中其他绑定行已占用的按键（数字键仍可绑定）；键盘按键和其他鼠标按键都可以捕获。右键和滚轮点击本身也是绑定：请读取 `KeyBindHelper.GetKeyDown(KeyBindHelper.SECONDARY_CLICK)`（物品菜单、取消模式）和 `KeyBindHelper.FLIP_ITEM_ALT`（翻转手中物品），而不是 `Input.GetMouseButtonDown(1)` / `(2)`，这样玩家的重新绑定才会作用到你的模组。玩家选择按键期间，游戏自己的快捷键保持静默；你的也应如此：`KeyBindHelper.SuppressHotkeys` 为 true 时跳过轮询。
 - 可在 `OnEnable` 中调用；窗口每次打开都会重新构建。
 
 只有当某个设置确实属于游戏自身的选项时才使用它。关于你模组本身的设置请放进模组自己的配置面板，见下文。
@@ -1230,7 +1231,7 @@ public void OnDisable()
 - **等级。** `AppraisalRankHelper.RANK_JUNIOR`（0，初级鉴定师）、`RANK_APPRAISER`（1）、`RANK_SENIOR`（2）、`RANK_MASTER`（3）。多个类型可以共用一个等级：该次晋升会一起解锁它们。原版：`hand` 在初级，`ribwich` 在鉴定师，`plasma_fuel` 在高级，大师级不解锁物品。`ModHelper.GetAppraiserRank()` 读取玩家的等级。
 - **评级。** 估价以 `getCorrectValue` 为准评级：误差 5% 以内为完美，10% 以内为优秀，15% 以内为良好，25% 以内为一般，超出则为糟糕。低于 50% 或高于 150% 一律被拒绝，每个等级还会拒绝部分较差的评级。请根据物品自身的状态计算数值，让它在物品放在柜台上时保持不变。
 - **`isType`** 告诉游戏某件物品属于你的类型。默认比较物品的标识符与 `itemId`；如果你的变体使用其他标识符，请传入自己的函数。
-- **屏蔽。** 玩家可以屏蔽在最新资格之前解锁的类型；最新等级的类型始终留在池中。
+- **屏蔽。** 在大师等级之前，玩家可以屏蔽在最新资格之前解锁的类型；最新等级的类型留在池中。到了大师等级，任何类型都可以屏蔽，但最后一个允许的类型除外，因此池永远不会为空。
 - **替换。** 注册 `hand`、`ribwich` 或 `plasma_fuel` 会替换原版条目（例如把它移到另一个等级）。`RemoveAppraisalItems(modId)` 会移除你的条目，但被替换的原版条目要重启游戏后才会恢复。
 - **`displayName`** 是证书提示框和"使用"窗口中显示的名称；默认是 `itemId` 对应物品的名称。
 - **`guideItemId`** 在玩家晋升到 `unlockRank` 时发放，玩家已经拥有一份时则不发。初级类型在加入委员会时就已解锁，所以它们的指南不会通过晋升发放。
@@ -1322,6 +1323,7 @@ public class MyMod : IMod
 | `native` | `DllImport`、`unsafe` 代码与指针、`calli`、`Marshal`、`UnsafeUtility` | 无，请声明 |
 | `reflection-external` | `Type.GetType`、`GetMethod` / `GetField` / `GetProperty` / `InvokeMember`、`Assembly.GetType` / `GetTypes`、使用**拼接出的**名称或类型的 `AccessTools` 或 `Traverse`，或者字面名称位于 `System.`、`UnityEngine.`、`HarmonyLib.`、`Steamworks.`、`ES3` 之下；C# 的 `dynamic` 关键字（它编译为运行时绑定器） | 用 `typeof(GameItem)` 或游戏类型的字面名称反射游戏类型：这是免费的 |
 | `steam` | 通过玩家的 Steam 会话调用任何 Steamworks.NET API：`SteamUserStats`、`SteamFriends`、`SteamUtils`、`SteamApps`、`SteamUser.GetSteamID`、`SteamUGC` 上的创意工坊查询、`Callback<T>` / `CallResult<T>`。`CSteamID`、`PublishedFileId_t` 等结构体和枚举是免费的。创意工坊写入、账户令牌和聊天永远不被允许（见下文） | 游戏已经通过 `ModWorkshop` 和模组菜单处理创意工坊；其他情况没有替代，请声明 |
+| `steam-auth` | `ModHelper.RequestSteamAuthTicket` 和 `CancelSteamAuthTicket`：游戏为你自己的服务器签发的 Steam 身份验证会话票证，让服务器能向 Steam 确认玩家是谁、是否拥有本游戏（见[向你的服务器证明玩家的 Steam 身份](#向你的服务器证明玩家的-steam-身份)）。不包含 `steam`，`steam` 也不包含它 | 无，请声明 |
 
 只有游戏自己的类型（`Assembly-CSharp`）和你自己的类型可以自由反射。扫描器会沿 IL 回溯到产生类型或名称的那条指令；无法判断时（值来自变量、分支、方法调用）按"拼接"处理，所以请优先写 `AccessTools.Method(typeof(PlayerStore), "ModCash")` 而不是用字符串拼出的 `AccessTools.Method("PlayerStore:ModCash")`，优先用 `typeof(X)` 而不是 `someObject.GetType()`。
 
@@ -1336,10 +1338,10 @@ public class MyMod : IMod
 - 指向浏览器配置、Steam 登录文件、Discord 数据或加密货币钱包的字符串常量；
 - 1024 个或更多 base64 字符组成的字符串常量（隐藏的载荷）；
 - 传入字面 `null` id 的 `Harmony.UnpatchAll()`，或 id 为 `"*"` 的任何 `Unpatch*` 调用（它们会移除所有模组的补丁，包括游戏自己的修复）。注意 `harmony.Unpatch(original, HarmonyPatchType.All)` 默认使用 `"*"`：请传入你自己的 id，即 `harmony.Unpatch(original, HarmonyPatchType.All, harmony.Id)`。以 `dse.` 开头的 id（游戏自己的补丁）同样会被拒绝；
-- 针对游戏模组加载器或信任代码的 Harmony 补丁或反射：`ModLoader`、`ModTrust`、`ModTrustRecord`、`ModFingerprint`、`ModTrustList`、`ModScanner`、`ModCapability`、`ModSecurityDebug`、`ModSteamRules`、`ModSteamGuard`、`ModWorkshop`、`SteamManager`、`PaperBookRegistry`，或针对 Steamworks 类型 `SteamUGC`、`SteamRemoteStorage`、`SteamUser`、`SteamFriends`、`SteamMatchmaking`、`SteamAPI`、`SteamClient`、`SteamGameServer*` 及其背后的绑定；
+- 针对游戏模组加载器或信任代码的 Harmony 补丁或反射：`ModLoader`、`ModTrust`、`ModTrustRecord`、`ModFingerprint`、`ModTrustList`、`ModScanner`、`ModCapability`、`ModSecurityDebug`、`ModSteamRules`、`ModSteamGuard`、`ModSteamAuth`、`ModWorkshop`、`SteamManager`、`PaperBookRegistry`，或针对 Steamworks 类型 `SteamUGC`、`SteamRemoteStorage`、`SteamUser`、`SteamFriends`、`SteamMatchmaking`、`SteamAPI`、`SteamClient`、`SteamGameServer*` 及其背后的绑定；
 - 对保存玩家批准记录和模组顺序的键（`modTrust`、`modOrder`、`workshopOwners`、免责声明的键）进行的 `ES3` 写入；读取它们没有问题；
 - 从游戏中发布或修改 Steam 创意工坊物品或 Steam 云文件：`SteamUGC` 中所有创建、更新、删除、订阅、下载或取消订阅物品的方法（`CreateItem`、`StartItemUpdate`、`SetItem*`、`SubmitItemUpdate` 等），以及所有 `SteamRemoteStorage` 写入。模组由作者用 steamcmd 发布，绝不由游戏通过玩家的账户发布；
-- 账户访问：`SteamUser` 身份验证和加密应用票证、商店登录 URL 和语音，`SteamFriends` 和 `SteamMatchmaking` 的聊天消息和邀请，`SteamAPI`（`IsSteamRunning` 除外）、`SteamClient`、游戏服务器 API、对 Steam 库的 `DllImport`，以及指向 Steam 原生库文件（`steam_api64.dll`）或其导出函数的字符串常量。游戏运行时也会拦截这些调用：被发现这样做的模组会被停止并停用，该版本在这台电脑上再也无法启用；
+- 账户访问：`SteamUser` 身份验证和加密应用票证、商店登录 URL 和语音，`SteamFriends` 和 `SteamMatchmaking` 的聊天消息和邀请，`SteamAPI`（`IsSteamRunning` 除外）、`SteamClient`、游戏服务器 API、对 Steam 库的 `DllImport`，以及指向 Steam 原生库文件（`steam_api64.dll`）或其导出函数的字符串常量。游戏运行时也会拦截这些调用：被发现这样做的模组会被停止并停用，该版本在这台电脑上再也无法启用。唯一的例外是游戏通过 `ModHelper.RequestSteamAuthTicket` 在 `steam-auth` 能力下替你的服务器签发的身份验证会话票证（见[下文](#向你的服务器证明玩家的-steam-身份)）；
 - 自带 `0Harmony`、MonoMod 或 Cecil，或任何与游戏程序集同名的 DLL（包括游戏已经附带的库，例如 `Newtonsoft.Json`）。请引用游戏自带的副本；
 - 文件夹中有 `<Assemblies>` 未列出的 DLL，或者所列 DLL 引用了既不是游戏的、也未列出的程序集。运行时会不经扫描直接从你的文件夹加载这种文件，所以整个模组会被拒绝，直到清单把它列出来；
 - 扫描器无法读取的 DLL：无法解析的方法体或 `[HarmonyPatch]` 特性会导致模组被拒绝，而不是被跳过。
@@ -1390,9 +1392,34 @@ string folder = ModHelper.GetModDataFolder("my_mod_id");                      //
 
 `LoadModAssetBundle` 用来代替 `AssetBundle.LoadFromFile`，后者算作 `files` 能力。对已经加载的资源包，Unity 会返回 null，所以请保留拿到的那个，用完后调用 `bundle.Unload(...)`。
 
-其他模组的数据文件夹是只读的：把它的 id 传给 `ReadModDataFileText` / `Bytes`、`ModDataFileExists` 或 `ListModDataFiles` 可以读取它共享的内容，但 `WriteModDataFileText` / `Bytes` 和 `DeleteModDataFile` 只接受你自己的 id，否则抛出 `UnauthorizedAccessException`。文件夹名会把点换成下划线并且不区分大小写，所以当两个已安装模组的 id 落到同一个文件夹（`my.mod` 和 `my_mod`）时，只有拼写与文件夹名完全一致的 id 才能写入。
+其他模组的数据文件夹是只读的：把它的 id 传给 `ReadModDataFileText` / `Bytes`、`ModDataFileExists` 或 `ListModDataFiles` 可以读取它共享的内容，但当 id 指向另一个已安装模组的文件夹时，`WriteModDataFileText` / `Bytes` 和 `DeleteModDataFile` 会抛出 `UnauthorizedAccessException`。你自己的 id 的其他写法（只要落到你自己的文件夹，例如 `CoolMod` 写成 `"coolmod"`），以及没有任何已安装模组使用的 id，都可以写入。文件夹名会把点换成下划线并且不区分大小写，所以当两个已安装模组的 id 落到同一个文件夹（`my.mod` 和 `my_mod`）时，只有拼写与文件夹名完全一致的 id 才能写入。
 
 与一局游戏绑定的数值仍应使用 `SetModData`（见[保存模组数据](#保存模组数据)）；设置请用[模组配置](#模组配置)。
+
+### 向你的服务器证明玩家的 Steam 身份
+
+拥有自己在线服务（多人服务器、排行榜）的模组可能需要确认：连接进来的玩家是真实的 Steam 用户，并且拥有本游戏。盗版和模拟器客户端拿不出 Steam 认可的票证。自己调用 `SteamUser.GetAuthSessionTicket` 会被拒绝（账户访问，见上文）。取而代之，游戏在 `steam-auth` 能力下替你签发票证，玩家看到的描述是"向该模组的在线服务证明你拥有本游戏"。它不包含 `steam`，`steam` 也不包含它；只和自己的服务器通信的模组声明 `steam-auth` 和 `network` 即可。
+
+```csharp
+// 清单：<Capability>steam-auth</Capability>（连接本身还需要 network）
+// 服务器在连接时告诉你的身份：它的 Steam ID（"steamid:90071992547409920"）
+// 或公网地址（"ip:203.0.113.5:27015"）。
+bool issued = ModHelper.RequestSteamAuthTicket("steamid:" + serverSteamId, ticket =>
+{
+    if (ticket == null) { /* Steam 拒绝了，或 20 秒内没有回应（离线？） */ return; }
+    SendToServer(ticket);   // 原始字节；服务器把它交给 BeginAuthSession
+});
+// 断开连接时，或向另一台服务器申请票证之前：
+ModHelper.CancelSteamAuthTicket();
+```
+
+需要知道的：
+
+- 未声明能力、Steam 未运行、身份无法解析或不在主线程调用时，`RequestSteamAuthTicket` 返回 `false` 并在日志中说明原因。返回 `true` 表示 Steam 正在准备票证；回调稍后在主线程运行，参数是票证字节，Steam 拒绝或 20 秒内没有回应时为 `null`。
+- 票证与你传入的身份绑定，所以请传服务器给你的那个：为别的身份签发的票证在服务器上会验证失败。接受两种写法：`steamid:<64 位 id>`（服务器自己的 Steam ID，匿名游戏服务器登录时会得到一个）和 `ip:<地址>:<端口>`。
+- 每个模组同一时间只有一张票证：再次申请会丢弃上一张（它的回调不再运行，服务器会收到它被作废的结果），所以请按连接申请，而不是按消息。模组被停止或游戏退出时，游戏会替你作废它。
+- 在服务器上用 `ISteamGameServer::BeginAuthSession` 验证（一个使用本游戏 App ID 运行的无界面 Steam 游戏服务器；匿名登录不需要任何人的密钥），玩家离开时调用 `EndAuthSession`。`k_EAuthSessionResponseOK` 表示真实 Steam 客户端上一个拥有本游戏的账户；`k_EAuthSessionResponseNoLicenseOrExpired` 是盗版或已过期的免费周末；家庭共享时，响应中的所有者 Steam ID 与玩家的不同。之后的变化（票证作废、该账户在别处登录、VAC 封禁）会作为同一会话的后续响应送到你的服务器。
+- 把它当作你唯一需要的身份凭证：票证向服务器证明了 Steam ID，所以不要相信客户端自己报上来的 Steam ID。
 
 ---
 

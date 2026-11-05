@@ -4,19 +4,56 @@ English version: [APIChanges.md](APIChanges.md)
 
 按游戏更新记录模组 API 的变化，最新的在最上面。每次更新内部按重要性排序：需要你立即处理的在前，新增能力在后。完整文档见 [ModdingGuide.zh-CN.md](ModdingGuide.zh-CN.md)。
 
+## 2026年11月4日
+
+**新增**
+
+- **由游戏签发、给你自己服务器用的 Steam 身份验证会话票证：`ModHelper.RequestSteamAuthTicket(serverIdentity, onTicket)` 和 `CancelSteamAuthTicket()`，属于新的 `steam-auth` 能力。** 拥有服务器（多人游戏、排行榜）的模组现在可以向服务器证明玩家是真实 Steam 客户端上一个拥有本游戏的账户，这正是把盗版和模拟器副本挡在门外的办法：服务器用 `ISteamGameServer::BeginAuthSession` 验证这些字节（一个使用本游戏 App ID 的无界面游戏服务器，匿名登录，不需要任何人的密钥）。身份是服务器给你的那个，`steamid:<id>` 或 `ip:<地址>:<端口>`，票证与它绑定。每个模组一张票证，再次申请、模组被停止和游戏退出时丢弃。玩家看到的能力描述是"向该模组的在线服务证明你拥有本游戏"，琥珀色；它不包含 `steam`，`steam` 也不包含它。自己调用 `SteamUser.GetAuthSessionTicket` 仍然被拒绝。扫描器把对这两个方法的调用计为 `steam-auth`，游戏在调用发生时会再次检查清单：没有声明时返回 `false` 并记录原因。背后的类 `ModSteamAuth` 加入受保护类型：针对它的 Harmony 补丁或反射会拒绝启用。[详情](ModdingGuide.zh-CN.md#向你的服务器证明玩家的-steam-身份)
+- **小改动。** `ModCapability.SteamAuth`（`"steam-auth"`）；`ModCapability.Risk.High` 现在有了用途，就是它。
+
+## 2026年11月3日
+
+**新增**
+
+- **`StoreClient.onShotSurvived`**：当一枪打伤了 `survivesShot` 的顾客时立即运行（`StoreUIManager.ShootSurvivor`），在受伤动画之前，无论 `shotSurvivedDialogue` 最终是否播放：用来记录该角色挨了枪。原版用于 Lou。
+- **`PlayerStore.CloseWantedPoster(string posterId)`**：按 id 关闭通缉令（状态 1，无赏金，不触发 `onCaptureAction`），用于角色不在柜台时发生的抓捕。原有的 `StoreClient` 重载不变。
+
+## 2026 年 11 月 2 日
+
+- **对剧情顾客使用霰弹枪：`StoreClient` 的四组新钩子。** `holsterResumesDialogue` 让拔枪时暂停顾客的对话而不是丢弃它（`DialogUIManager.PauseConversation`），收枪时从被打断处继续（`ResumeConversation`）：顾客留下而不是被打发走。`unholsterDialogue` 是顾客对枪的专属反应（null 为随机台词池，`AugHelper.GetClientReactionUnholster`）。`shotCountsAsCapture` 让保安把被击毙的无义体通缉犯视为抓捕（`AugHelper.SHOT_WANTED_CAPTURE`，`GetShootResult` 的第三种结果）：赏金、保安声望、阵营变化、回执和 `onCaptureAction`，经由 `PlayerStore.OnWantedClientShot`；`shotCaptureDialogue` 是检查之后警官的独白（SEC 台词；null 为 `StoreClientDialogList.SecShotWantedGenericDialog`）。`survivesShot` 让枪击只造成受伤而非死亡：枪口闪光和受伤帧照常播放，没有人倒下，也不会叫来保安；`shotSurvivedDialogue` 在枪放回架子后播放，必须以打发顾客结束（`StoreClientMono.SetLimpOnLeave` 放慢离开的脚步）。`forceShootable` 允许对不可打发或不可逮捕的顾客拔枪。`onShotDead` 在标准的过失杀人惩罚之后运行（`AugHelper.CleanupKill`）。原版用在 Serpico、李北文、屠夫和 Sawyer 身上。
+- **被当作过失杀人击毙的通缉海报人物现在会关闭其海报**（`PlayerStore.CloseWantedPoster`：`wantedStatus` 为 1，无奖励，不调用 `onCaptureAction`），因此他们的回访像被捕后一样停止。隐藏通缉不受影响。`PlayerStore.GrantWantedCaptureReward(client, isShot)` 与 `ApplyReportFactionChange(client)` 是举报的奖励与阵营变化，现在可以单独调用。
+**新增**
+
+- **"配置"：带设置窗口的物品的右键菜单动作。** 给物品打上 `GeneralHelper.CONFIGURE_TAG` 标签并设置 `item.onConfigureSlotItemFunc`，右键菜单就只在该物品上列出**配置**（物品归玩家所有之前为灰色）并调用该钩子。激活和切换保持原有含义，所以激活会执行操作的物品仍能提供设置。包装方法是 `GameItem.MayConfigureSlotItem`、`CanConfigureSlotItem` 和 `ConfigureSlotItem`。读档时保存的物品状态会替换工厂打的标签，所以也要在 `onSlotAddItemFunc` 里再打一次（参考 `HopperHelper.CreateOutlet` 里的输出漏斗）。
+- **鼠标右键和滚轮点击成为按键绑定。** `KeyBindHelper.SECONDARY_CLICK`（默认 `Mouse1`）打开物品的右键菜单、翻转或旋转手中的物品，并退出装备模式、钉选模式、容器选取、存储协调器的按键捕获和放大镜缩放；`KeyBindHelper.FLIP_ITEM_ALT`（默认 `Mouse2`）翻转手中的物品。`ItemContextHandler.triggerKey` 现在读取该绑定，不再是检视器字段。响应右键的模组应改为读取 `KeyBindHelper.GetKeyDown(KeyBindHelper.SECONDARY_CLICK)`，而不是 `Input.GetMouseButtonDown(1)`。
+- **鼠标按键可以被捕获为按键绑定**，左键除外（`KeyBindHelper.IsReserved(KeyCode.Mouse0)`），你的绑定同样适用。`KeyBindHelper.KeyName` 将它们命名为 "Right Click"、"Wheel Click"、"Mouse 4" 等。捕获进行期间，鼠标按下不再传到 `InputActionManager` 的处理器（此前只有鼠标输入仍会传入）。
+
+## 2026 年 11 月 1 日
+
+**建议处理**
+
+- **销毁物品现在会连同其内容窗口以及窗口里剩下的物品一起销毁。** 对容器（任何带 `contentWindow` 的物品）调用 `GameItem.Destroy()` 会销毁窗口的渲染树和其库存中的物品，之后 `item.contentWindow` 为 null。此前该窗口会隐藏着留存整个会话，并把已销毁的物品及其内容一直保留在内存中。如果某个模组先销毁容器、再通过旧窗口读取其内容，现在必须先把物品移出（`GraphUtils.TryAcceptAll` 或 `GameItem.TryUnloadAll`）。
+
+**新增**
+
+- **`PixelWindow.Destroy()`** 释放你自己创建的窗口（渲染树、停靠、浮层画布和根列表中的登记）。通过 `SetContentWindow` 设置的窗口无需处理：物品会一并带走它。
+- **`GraphUtils.EmporiumTryAdd(node, item)` 现在会先经由进料斗转送溢出物。** 当目标容器放不下该物品时，放在该容器里的进料斗会在商店兜底链之前按夜间顺序依次得到它，每个进料斗各按自己的过滤规则判断（保留数量不适用）；出料斗所在容器的规则通过正常的接收路径生效，只被收下一部分的堆叠会继续交给下一个进料斗，没人收下的部分照旧溢出到商店。对应的公开方法是 `HopperHelper.TryRouteOverflow(GameInventory grid, GameItem item)`，供以其他方式放置产出的机器调用。原版中放不下时会销毁或丢失产出的机器（培养肉机、熔炉的第二块锭、打印机、解序仪）现在和种植机一样通过 `EmporiumTryAdd` 溢出；模组机器也应以同样方式放置产出，这样料斗才能搬运它们。
+- **`StallWatchdog.Crumb(text)`** 为卡顿报告留下一条痕迹。当主线程连续五秒没有完成任何一帧时，游戏会把最近 24 条痕迹连同内存计数追加到自己的 `GameLog_*.txt` 中，并在恢复后记录持续时间。可在任何线程、在可能耗时的操作开始时调用，一条简短的文字即可。
+
 ## 2026 年 10 月 31 日（安全更新 2）
 
 **建议处理**
 
 - **针对 `PaperBookRegistry` 的 Harmony 补丁或反射会导致启用被拒绝。** 调用它的公开方法以及 `ModHelper` 的纸张相关函数不受影响。[详情](ModdingGuide.zh-CN.md#一律拒绝的情况)
 - **书本文件只能在模组文件夹内读写。** `PaperBookRegistry.Save`、`LoadFile` 和 `ReloadFromDisk` 会拒绝 `Mods/` 和你自己模组文件夹以外的路径，以及不是 `.json` 文件的路径，并改为记录一条错误。
-- **其他模组的数据文件夹为只读。** `ReadModDataFileText` / `Bytes`、`ModDataFileExists` 和 `ListModDataFiles` 仍可使用任何模组的 id，但用别的模组的 id 调用 `WriteModDataFileText` / `Bytes` 和 `DeleteModDataFile` 会抛出 `UnauthorizedAccessException`。[详情](ModdingGuide.zh-CN.md#不声明能力也能读写文件)
+- **其他模组的数据文件夹为只读。** `ReadModDataFileText` / `Bytes`、`ModDataFileExists` 和 `ListModDataFiles` 仍可使用任何模组的 id，但当 id 指向另一个已安装模组的数据文件夹时，`WriteModDataFileText` / `Bytes` 和 `DeleteModDataFile` 会抛出 `UnauthorizedAccessException`。你自己的 id 的其他写法（只要指向你自己的文件夹，例如 `CoolMod` 写成 `"coolmod"`），以及没有任何已安装模组使用的 id，仍可正常使用。如果一次写入在调用栈上找不到任何模组代码（例如 Harmony transpiler 插入到游戏方法里的代码，或动态生成的代码），则对所有已安装模组的文件夹都会被拒绝，包括你自己的：请从你自己的方法里调用这些函数。[详情](ModdingGuide.zh-CN.md#不声明能力也能读写文件)
 - **已批准的模组会在此版本首次启动时重新扫描一次。**
 
 **新增**
 
 - **无需 `files` 能力即可使用资源包。** `ModHelper.LoadModAssetBundle(modId, relativePath)` 从你的模组文件夹加载资源包；只有接受路径的 `AssetBundle` 加载方法（`LoadFromFile`、`LoadFromFileAsync`、`RecompressAssetBundleAsync`）仍算作 `files`，`LoadFromMemory`、`LoadAsset` 等其余成员是免费的。只为资源包声明了 `files` 的模组可以去掉它。[详情](ModdingGuide.zh-CN.md#不声明能力也能读写文件)
-- **`DifficultyRules.louDemandValue`**：Lou 在伪装来访之后索要的物资价值（信用点），休闲 500、普通 750、困难 1000、挑战 1500。用 `AddDifficulty` 注册的难度会从其 `basedOn` 复制这个值。已移除的常量 `StoreClientData.LOU_DEMAND_VALUE` 改为 `StoreClientData.GetLouDemandValue()`。
+- **`DifficultyRules.louDemandValue`**：Lou 在伪装来访之后索要的物资价值（信用点），休闲 500、普通 750、困难 1000、挑战 1500。用 `AddDifficulty` 注册的难度会从其 `basedOn` 复制这个值。已移除的常量 `StoreClientData.LOU_DEMAND_VALUE` 改为 `StoreClientData.GetLouDemandValue()`。她来收取时的炸弹阈值是该值的一半，即 `StoreClientData.GetLouDemandMinimum()`；常量 `LOU_DEMAND_MINIMUM` 已标记为 `[Obsolete]`，不再被读取。
+- **其他小的新增。** `ModLoader.CallingModId()` 返回当前调用栈上最近的模组的 id，游戏自身的代码则返回 null（上面的数据文件夹规则就用它判断）。`ModWorkshop.TryGetStats(publishedFileId, out ItemStats)` 在 Steam 回应后给出创意工坊物品的首次上传日期和好评、差评数（`ItemStats.createdUtc`、`votesUp`、`votesDown`、`Ratings`）。`ModCapability.Risk` 和 `RiskOf(capability)` 给出启用对话框为每项能力着色所用的风险等级（native、dynamic-code、files、reflection-external 和 network 为 `Severe`，steam 和 process 为 `Medium`）。
 
 ## 2026 年 10 月 30 日（安全更新）
 

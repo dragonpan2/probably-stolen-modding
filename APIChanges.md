@@ -4,19 +4,56 @@
 
 What changed in the modding API, per game update, newest on top. Within each update, entries are ordered by importance: things you must act on first, new capabilities last. Full documentation lives in [ModdingGuide.md](ModdingGuide.md).
 
+## November 4, 2026
+
+**New**
+
+- **A Steam auth session ticket for your own server, issued by the game: `ModHelper.RequestSteamAuthTicket(serverIdentity, onTicket)` and `CancelSteamAuthTicket()`, under the new `steam-auth` capability.** A mod with a server (multiplayer, leaderboards) can now prove to it that the player is a real Steam client on an account that owns the game, which is what keeps pirated and emulated copies out: the server validates the bytes with `ISteamGameServer::BeginAuthSession` (a headless game server under the game's App ID, anonymous logon, no key from anyone). The identity is the one your server gave you, `steamid:<id>` or `ip:<address>:<port>`, and the ticket is bound to it. One ticket per mod, dropped by a new request, when the mod is stopped and at quit. The player sees the capability as "Prove that you own the game to this mod's online service", in amber; it is not part of `steam` and `steam` is not part of it. Calling `SteamUser.GetAuthSessionTicket` yourself stays refused. The scanner counts a call to these two methods as `steam-auth`, and the game checks the manifest again when the call runs: without the declaration it returns `false` and logs why. `ModSteamAuth`, the class behind it, joins the guard types: a Harmony patch or reflection aimed at it refuses the activation. [Details](ModdingGuide.md#proving-the-players-steam-identity-to-your-server)
+- **Smaller additions.** `ModCapability.SteamAuth` (`"steam-auth"`); `ModCapability.Risk.High` is now in use, for it.
+
+## November 3, 2026
+
+**New**
+
+- **`StoreClient.onShotSurvived`** runs the moment a shot wounds a `survivesShot` client (`StoreUIManager.ShootSurvivor`), before the wound frames and whether or not `shotSurvivedDialogue` gets to play: the place to record that the character was shot. Vanilla uses it on Lou.
+- **`PlayerStore.CloseWantedPoster(string posterId)`** closes a wanted poster by id (status 1, no reward, no `onCaptureAction`), for a capture that happens without the character at the counter. The `StoreClient` overload is unchanged.
+
+## November 2, 2026
+
+- **The shotgun on story clients: four `StoreClient` hooks.** `holsterResumesDialogue` makes drawing the gun PAUSE the client's conversation instead of dropping it (`DialogUIManager.PauseConversation`), and holstering resume it where it was cut (`ResumeConversation`): the client stays instead of being dismissed. `unholsterDialogue` is the client's own reaction to the gun (null: the random pool, `AugHelper.GetClientReactionUnholster`). `shotCountsAsCapture` makes Security treat a shot wanted client without augs as a capture (`AugHelper.SHOT_WANTED_CAPTURE`, third result of `GetShootResult`): the bounty, the Security reputation, the faction change, the slip and `onCaptureAction`, through `PlayerStore.OnWantedClientShot`; `shotCaptureDialogue` is the officer's monologue after the check (SEC lines; null: `StoreClientDialogList.SecShotWantedGenericDialog`). `survivesShot` makes the shot wound instead of kill: the flash and the wound frames play, nobody falls and Security is not called; `shotSurvivedDialogue` plays once the gun is back in the rack and must end by dismissing the client (`StoreClientMono.SetLimpOnLeave` slows the walk out). `forceShootable` lets the gun come out on a client who is not dismissable or not arrestable. `onShotDead` runs after the standard manslaughter penalties (`AugHelper.CleanupKill`). Vanilla uses them on Serpico, Li Bei Wen, the Butcher and Sawyer.
+- **A wanted poster character shot dead as manslaughter now closes their poster** (`PlayerStore.CloseWantedPoster`: `wantedStatus` 1, no reward, no `onCaptureAction`), so their returns stop like after an arrest. Stealth posters are not touched. `PlayerStore.GrantWantedCaptureReward(client, isShot)` and `ApplyReportFactionChange(client)` are the report's reward and faction change, now callable on their own.
+**New**
+
+- **Configure, a context menu action for items with a settings window.** Tag the item `GeneralHelper.CONFIGURE_TAG` and set `item.onConfigureSlotItemFunc`; the right-click menu then lists **Configure** on that item only (greyed until the item is the player's) and calls the hook. Activate and Toggle keep their meaning, so an item whose Activate does work can still offer settings. The wrappers are `GameItem.MayConfigureSlotItem`, `CanConfigureSlotItem` and `ConfigureSlotItem`. The saved item state replaces the factory's tags on load, so stamp the tag from `onSlotAddItemFunc` as well (the Outlet Hopper in `HopperHelper.CreateOutlet` is the reference).
+- **The right click and the wheel click are key binds.** `KeyBindHelper.SECONDARY_CLICK` (default `Mouse1`) opens an item's context menu, flips or rotates the held item and leaves equip mode, pin mode, a container pick, the storage coordinator's key capture and the magnifying zoom; `KeyBindHelper.FLIP_ITEM_ALT` (default `Mouse2`) flips the held item. `ItemContextHandler.triggerKey` reads the binding and is no longer an inspector field. A mod that reacts to the right click should read `KeyBindHelper.GetKeyDown(KeyBindHelper.SECONDARY_CLICK)` instead of `Input.GetMouseButtonDown(1)`.
+- **Mouse buttons can be captured for a key bind**, the left one excepted (`KeyBindHelper.IsReserved(KeyCode.Mouse0)`), for your bindings too. `KeyBindHelper.KeyName` names them "Right Click", "Wheel Click", "Mouse 4" and up. While a capture runs, mouse presses no longer reach the `InputActionManager` handlers (they were the only input that still did).
+
+## November 1, 2026
+
+**Action recommended**
+
+- **Destroying an item now destroys its content window and whatever is still inside it.** `GameItem.Destroy()` on a container (anything with a `contentWindow`) destroys the window's render tree and the items in its inventories, and `item.contentWindow` is null afterwards. Before, the window stayed behind hidden for the whole session and kept the dead item and its contents in memory. A mod that destroyed a container and then read its contents through the old window must move them out first (`GraphUtils.TryAcceptAll` or `GameItem.TryUnloadAll`).
+
+**New**
+
+- **`PixelWindow.Destroy()`** releases a window you created yourself (its render tree, dock, raised canvas and root registrations). Windows set with `SetContentWindow` need nothing: the item takes them along.
+- **`GraphUtils.EmporiumTryAdd(node, item)` now routes overflow through Intake Hoppers.** When the node refuses the item, the Intake Hoppers sitting in that inventory get it before the store chain, in their night order, each under its own filter (the keep count does not apply); the outlet's rules decide through the normal accept path, a partly taken stack goes on to the next intake, whatever nobody takes spills as before. This is `HopperHelper.TryRouteOverflow(GameInventory grid, GameItem item)`, public for machines that place output some other way. Vanilla machines that used to destroy or lose output that no longer fit (Meat Culture, the Furnace's second ingot, the Printer, the Desequencer) now spill it through `EmporiumTryAdd` like the planter; a modded machine should place its output the same way so hoppers carry it.
+- **`StallWatchdog.Crumb(text)`** leaves a breadcrumb for the stall report. When the main thread finishes no frame for five seconds, the game appends the last 24 breadcrumbs with the memory counters to its `GameLog_*.txt` and logs the duration once it resumes. Call it from any thread at the start of work that can take long, one short line.
+
 ## October 31, 2026 (security update 2)
 
 **Action recommended**
 
 - **Harmony patches or reflection aimed at `PaperBookRegistry` refuse the activation.** Calling its public methods and the `ModHelper` paper functions works as before. [Details](ModdingGuide.md#hard-refusals)
 - **Book files are read and written only inside the mod folders.** `PaperBookRegistry.Save`, `LoadFile` and `ReloadFromDisk` refuse a path outside `Mods/` and your mod's own folder, or one that is not a `.json` file, and log an error instead.
-- **Another mod's data folder is read-only.** `ReadModDataFileText` / `Bytes`, `ModDataFileExists` and `ListModDataFiles` still work with any mod's id, but `WriteModDataFileText` / `Bytes` and `DeleteModDataFile` with an id other than your own throw `UnauthorizedAccessException`. [Details](ModdingGuide.md#reading-and-writing-files-without-the-capability)
+- **Another mod's data folder is read-only.** `ReadModDataFileText` / `Bytes`, `ModDataFileExists` and `ListModDataFiles` still work with any mod's id, but `WriteModDataFileText` / `Bytes` and `DeleteModDataFile` throw `UnauthorizedAccessException` when the id names the data folder of another installed mod. Your own id in any spelling that maps to your folder (`"coolmod"` for `CoolMod`) and ids no installed mod uses keep working. A write that no mod's code on the call stack explains (code a Harmony transpiler inserted into a game method, or emitted code) is refused for every installed mod's folder, your own included: call these from your own methods. [Details](ModdingGuide.md#reading-and-writing-files-without-the-capability)
 - **Approved mods are scanned again once** at the first start of this version.
 
 **New**
 
 - **Asset bundles without the `files` capability.** `ModHelper.LoadModAssetBundle(modId, relativePath)` loads a bundle from your mod folder, and only the `AssetBundle` loaders that take a path (`LoadFromFile`, `LoadFromFileAsync`, `RecompressAssetBundleAsync`) still count as `files`: `LoadFromMemory`, `LoadAsset` and the rest are free. A mod that declared `files` only for its bundle can drop it. [Details](ModdingGuide.md#reading-and-writing-files-without-the-capability)
-- **`DifficultyRules.louDemandValue`**: the Credits of goods Lou demands after her disguise visit (cozy 500, normal 750, hard 1000, challenge 1500). A difficulty registered with `AddDifficulty` copies it from its `basedOn`. The removed constant `StoreClientData.LOU_DEMAND_VALUE` is now `StoreClientData.GetLouDemandValue()`.
+- **`DifficultyRules.louDemandValue`**: the Credits of goods Lou demands after her disguise visit (cozy 500, normal 750, hard 1000, challenge 1500). A difficulty registered with `AddDifficulty` copies it from its `basedOn`. The removed constant `StoreClientData.LOU_DEMAND_VALUE` is now `StoreClientData.GetLouDemandValue()`. The bomb threshold of her collection visit is half that value, `StoreClientData.GetLouDemandMinimum()`; the constant `LOU_DEMAND_MINIMUM` is `[Obsolete]` and no longer read.
+- **Smaller additions.** `ModLoader.CallingModId()` returns the id of the nearest mod on the current call stack, or null for the game's own code (what the data folder rule above uses). `ModWorkshop.TryGetStats(publishedFileId, out ItemStats)` gives a Workshop item's first upload date and up and down votes once Steam has answered (`ItemStats.createdUtc`, `votesUp`, `votesDown`, `Ratings`). `ModCapability.Risk` and `RiskOf(capability)` give the risk level the activation dialog colours each capability with (`Severe` for native, dynamic code, files, external reflection and network; `Medium` for steam and process).
 
 ## October 30, 2026 (security update)
 

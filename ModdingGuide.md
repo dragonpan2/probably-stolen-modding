@@ -61,6 +61,7 @@ This guide covers advanced topics for mod development and assumes you have alrea
     - [What players see](#what-players-see)
     - [Developer mode](#developer-mode)
     - [Reading and writing files without the capability](#reading-and-writing-files-without-the-capability)
+    - [Proving the player's Steam identity to your server](#proving-the-players-steam-identity-to-your-server)
   - [Steam Workshop](#steam-workshop)
     - [Publishing with steamcmd](#publishing-with-steamcmd)
   - [Harmony Patches](#harmony-patches)
@@ -931,7 +932,7 @@ Rules:
 - **Labels, tooltips and dropdown options are functions**, resolved every time the window opens, so `() => ModHelper.GetLocalized(...)` follows a language change. A tooltip adds the info icon next to the label.
 - **Ids are namespaced.** `optionId` and your own section ids are prefixed with your mod id internally, so they cannot collide with another mod. Registering an id again replaces the earlier entry. `RemoveGameOption(modId, optionId)` and `RemoveGameOptions(modId)` take entries out again. `ModHelper.GameOptionId(modId, optionId)` returns the prefixed id (`"modId:optionId"`) the game uses internally, for the rare case where you need to match an entry by its full id.
 - **Order** is registration order inside a section; your sections appear after the built-in ones.
-- **Key binds** refuse Escape and any key another bind row in the window already uses (the digit keys stay bindable), and only keyboard keys can be captured. While the player is choosing a key, the game's own hotkeys stay quiet; yours should too: skip your poll while `KeyBindHelper.SuppressHotkeys` is true.
+- **Key binds** refuse Escape, the left mouse button and any key another bind row in the window already uses (the digit keys stay bindable); keyboard keys and the other mouse buttons can be captured. The right click and the wheel click are bindings themselves: read `KeyBindHelper.GetKeyDown(KeyBindHelper.SECONDARY_CLICK)` (item menu, cancelling a mode) and `KeyBindHelper.FLIP_ITEM_ALT` (flip the held item) instead of `Input.GetMouseButtonDown(1)` / `(2)`, so a remap reaches your mod. While the player is choosing a key, the game's own hotkeys stay quiet; yours should too: skip your poll while `KeyBindHelper.SuppressHotkeys` is true.
 - Callable from `OnEnable`; the window is built fresh on every open.
 
 Use this only for a setting that genuinely belongs among the game's own options. Settings about your mod itself go in your mod's configuration panel, below.
@@ -1231,7 +1232,7 @@ Rules:
 - **Ranks.** `AppraisalRankHelper.RANK_JUNIOR` (0, Junior Appraiser), `RANK_APPRAISER` (1), `RANK_SENIOR` (2), `RANK_MASTER` (3). Several types can share a rank: the promotion unlocks all of them. Vanilla: `hand` at Junior, `ribwich` at Appraiser, `plasma_fuel` at Senior, nothing at Master. `ModHelper.GetAppraiserRank()` reads the player's rank.
 - **Grading.** The estimate is graded against `getCorrectValue`: Perfect within 5%, Excellent within 10%, Good within 15%, Mediocre within 25%, Awful beyond. Below 50% or above 150% is always refused, and each rank refuses some of the poor grades. Compute the value from the item's own state so it does not change while the item is on the counter.
 - **`isType`** tells the game an item belongs to your type. The default compares the item's identifier with `itemId`; pass your own when your variants use other identifiers.
-- **Blocking.** The player can block the types unlocked before their newest qualification; the types of the newest rank always stay in the pool.
+- **Blocking.** Below Master the player can block the types unlocked before their newest qualification; the types of the newest rank stay in the pool. At Master every type can be blocked except the last allowed one, so the pool is never empty.
 - **Replacing.** Registering `hand`, `ribwich` or `plasma_fuel` replaces the vanilla entry (for example to move it to another rank). `RemoveAppraisalItems(modId)` removes your entries, but a replaced vanilla entry only comes back after a restart.
 - **`displayName`** is the name shown in the certificate tooltip and the Activate window; the default is the item's name from `itemId`.
 - **`guideItemId`** is given when the player is promoted to `unlockRank`, unless they already own one. Junior types are unlocked at the join, so their guide is never handed over by a promotion.
@@ -1323,6 +1324,7 @@ The other files in your folder are checked too: executables and scripts (`.exe`,
 | `native` | `DllImport`, `unsafe` code and pointers, `calli`, `Marshal`, `UnsafeUtility` | none, declare it |
 | `reflection-external` | `Type.GetType`, `GetMethod` / `GetField` / `GetProperty` / `InvokeMember`, `Assembly.GetType` / `GetTypes`, `AccessTools` or `Traverse` with a **computed** name or type, or with a literal name under `System.`, `UnityEngine.`, `HarmonyLib.`, `Steamworks.`, `ES3`; the C# `dynamic` keyword (it compiles to the runtime binder) | reflect on game types with `typeof(GameItem)` or a literal game type name: that is free |
 | `steam` | Any Steamworks.NET API call through the player's Steam session: `SteamUserStats`, `SteamFriends`, `SteamUtils`, `SteamApps`, `SteamUser.GetSteamID`, Workshop queries on `SteamUGC`, `Callback<T>` / `CallResult<T>`. Structs and enums such as `CSteamID` or `PublishedFileId_t` are free. Workshop writes, account tokens and chat are never allowed (see below) | `ModWorkshop` and the Mods menu for what the game already does with the Workshop; none otherwise, declare it |
+| `steam-auth` | `ModHelper.RequestSteamAuthTicket` and `CancelSteamAuthTicket`: a Steam auth session ticket the game issues for a server of your own, so it can confirm with Steam who the player is and that they own the game (see [Proving the player's Steam identity to your server](#proving-the-players-steam-identity-to-your-server)). Not part of `steam`, and `steam` is not part of it | none, declare it |
 
 Only the game's own types (`Assembly-CSharp`) and your own are free for reflection. The scanner follows the IL back to the instruction that produced the type or the name; when it cannot tell (the value came through a variable, a branch, a method call), it counts as computed, so prefer `AccessTools.Method(typeof(PlayerStore), "ModCash")` over `AccessTools.Method("PlayerStore:ModCash")` built from strings, and `typeof(X)` over `someObject.GetType()`.
 
@@ -1337,10 +1339,10 @@ Some patterns refuse the activation whatever the manifest says, because no legit
 - string constants pointing at browser profiles, Steam login files, Discord data or crypto wallets;
 - a string constant of 1024 or more base64 characters (a hidden payload);
 - `Harmony.UnpatchAll()` with a literal `null` id, or any `Unpatch*` call with the id `"*"` (they remove every mod's patches, the game's own fixes included). Note that `harmony.Unpatch(original, HarmonyPatchType.All)` uses `"*"` by default: pass your own id, `harmony.Unpatch(original, HarmonyPatchType.All, harmony.Id)`. An id starting with `dse.` (the game's own patches) is refused as well;
-- Harmony patches or reflection aimed at the game's mod loader or trust code: `ModLoader`, `ModTrust`, `ModTrustRecord`, `ModFingerprint`, `ModTrustList`, `ModScanner`, `ModCapability`, `ModSecurityDebug`, `ModSteamRules`, `ModSteamGuard`, `ModWorkshop`, `SteamManager`, `PaperBookRegistry`, or at the Steamworks types `SteamUGC`, `SteamRemoteStorage`, `SteamUser`, `SteamFriends`, `SteamMatchmaking`, `SteamAPI`, `SteamClient`, `SteamGameServer*` and the bindings behind them;
+- Harmony patches or reflection aimed at the game's mod loader or trust code: `ModLoader`, `ModTrust`, `ModTrustRecord`, `ModFingerprint`, `ModTrustList`, `ModScanner`, `ModCapability`, `ModSecurityDebug`, `ModSteamRules`, `ModSteamGuard`, `ModSteamAuth`, `ModWorkshop`, `SteamManager`, `PaperBookRegistry`, or at the Steamworks types `SteamUGC`, `SteamRemoteStorage`, `SteamUser`, `SteamFriends`, `SteamMatchmaking`, `SteamAPI`, `SteamClient`, `SteamGameServer*` and the bindings behind them;
 - `ES3` writes on the keys that hold the player's approvals and mod order (`modTrust`, `modOrder`, `workshopOwners`, the disclaimer key); reading them is fine;
 - publishing or changing Steam Workshop items or Steam Cloud files from the game: every `SteamUGC` method that creates, updates, deletes, subscribes, downloads or unsubscribes an item (`CreateItem`, `StartItemUpdate`, `SetItem*`, `SubmitItemUpdate`, ...), and every `SteamRemoteStorage` write. Mods are published by their authors with steamcmd, never by the game on a player's account;
-- account access: `SteamUser` authentication and encrypted app tickets, store sign-in URLs and voice, `SteamFriends` and `SteamMatchmaking` chat messages and invites, `SteamAPI` (except `IsSteamRunning`), `SteamClient`, the game server APIs, a `DllImport` into a Steam library, and string constants naming Steam's native library files (`steam_api64.dll`) or their exported functions. The game also blocks these calls while it runs: a mod caught making one is stopped, deactivated, and that version can no longer be activated on that computer;
+- account access: `SteamUser` authentication and encrypted app tickets, store sign-in URLs and voice, `SteamFriends` and `SteamMatchmaking` chat messages and invites, `SteamAPI` (except `IsSteamRunning`), `SteamClient`, the game server APIs, a `DllImport` into a Steam library, and string constants naming Steam's native library files (`steam_api64.dll`) or their exported functions. The game also blocks these calls while it runs: a mod caught making one is stopped, deactivated, and that version can no longer be activated on that computer. The one exception is the auth session ticket the game issues itself for your own server through `ModHelper.RequestSteamAuthTicket`, under the `steam-auth` capability (see [below](#proving-the-players-steam-identity-to-your-server));
 - shipping your own `0Harmony`, MonoMod or Cecil, or any DLL named like a game assembly (including libraries the game already ships, such as `Newtonsoft.Json`). Reference the game's copies instead;
 - a DLL in your folder that `<Assemblies>` does not list, or a listed DLL that references an assembly which is neither the game's nor listed. The runtime would load such a file from your folder without the scan, so the whole mod is refused until the manifest lists it;
 - a DLL the scanner cannot read: a method body or a `[HarmonyPatch]` attribute it cannot decode refuses the mod rather than being skipped.
@@ -1391,9 +1393,34 @@ A path that is absolute, empty or escapes the folder (`../`) throws `ArgumentExc
 
 `LoadModAssetBundle` replaces `AssetBundle.LoadFromFile`, which counts as the `files` capability. Unity returns null for a bundle that is already loaded, so keep the one you got and call `bundle.Unload(...)` when you are done with it.
 
-Another mod's data folder is read-only: pass its id to `ReadModDataFileText` / `Bytes`, `ModDataFileExists` or `ListModDataFiles` to read what it shares, but `WriteModDataFileText` / `Bytes` and `DeleteModDataFile` throw `UnauthorizedAccessException` unless the id is your own. The folder name turns dots into underscores and ignores case, so when two installed mods' ids land on the same folder (`my.mod` and `my_mod`), only the id spelled exactly like the folder name may write there.
+Another mod's data folder is read-only: pass its id to `ReadModDataFileText` / `Bytes`, `ModDataFileExists` or `ListModDataFiles` to read what it shares, but `WriteModDataFileText` / `Bytes` and `DeleteModDataFile` throw `UnauthorizedAccessException` when the id names another installed mod's folder. Your own id in any spelling that lands on your folder (`"coolmod"` for `CoolMod`), and ids no installed mod uses, can be written. The folder name turns dots into underscores and ignores case, so when two installed mods' ids land on the same folder (`my.mod` and `my_mod`), only the id spelled exactly like the folder name may write there.
 
 For values tied to a run, `SetModData` is still the right tool (see [Saving Mod Data](#saving-mod-data)); for settings, [Mod Configuration](#mod-configuration).
+
+### Proving the player's Steam identity to your server
+
+A mod with an online service of its own (a multiplayer server, a leaderboard) may need to know that the player connecting is a real Steam user who owns the game: pirated and emulated clients cannot produce a ticket Steam accepts. Calling `SteamUser.GetAuthSessionTicket` yourself is refused (account access, see above). Instead the game issues the ticket for you, under the `steam-auth` capability, which the player sees as "Prove that you own the game to this mod's online service". It is not part of `steam`, and `steam` is not part of it; a mod that only talks to its own server declares `steam-auth` and `network`.
+
+```csharp
+// Manifest: <Capability>steam-auth</Capability> (plus network for the connection itself)
+// The identity your server told you on connect: its Steam ID ("steamid:90071992547409920")
+// or its public address ("ip:203.0.113.5:27015").
+bool issued = ModHelper.RequestSteamAuthTicket("steamid:" + serverSteamId, ticket =>
+{
+    if (ticket == null) { /* Steam refused, or did not answer within 20 seconds (offline?) */ return; }
+    SendToServer(ticket);   // raw bytes; the server passes them to BeginAuthSession
+});
+// When you disconnect, or before asking for a ticket for another server:
+ModHelper.CancelSteamAuthTicket();
+```
+
+What to know:
+
+- `RequestSteamAuthTicket` returns `false` and logs the reason when the capability is not declared, Steam is not running, the identity does not parse, or the call is not on the main thread. `true` means Steam is preparing the ticket; the callback runs later on the main thread with the ticket bytes, or with `null` when Steam refused or 20 seconds passed.
+- The ticket is bound to the identity you pass, so send the one your server gave you: a ticket issued for another identity fails on the server. Two forms are accepted, `steamid:<64-bit id>` (the server's own Steam ID, which an anonymous game server learns when it logs on) and `ip:<address>:<port>`.
+- One ticket per mod: asking again drops the previous one (its callback no longer runs, and the server receives a cancelled result for it), so request a ticket per connection, not per message. The game cancels it when the mod is stopped or the game quits.
+- On your server, validate with `ISteamGameServer::BeginAuthSession` (a headless Steam game server running under the game's App ID; anonymous logon needs no key from anyone) and call `EndAuthSession` when the player leaves. `k_EAuthSessionResponseOK` means a real Steam client on an account that owns the game; `k_EAuthSessionResponseNoLicenseOrExpired` is a pirated copy or a lapsed free weekend; with Family Sharing the response's owner Steam ID differs from the player's. Later changes (the ticket cancelled, the account logged in elsewhere, a VAC ban) reach your server as further responses for the same session.
+- Treat it as the only identity token you need: the ticket proves the Steam ID to your server, so do not accept a Steam ID the client merely claims.
 
 ---
 
