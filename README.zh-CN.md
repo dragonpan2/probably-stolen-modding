@@ -156,7 +156,7 @@ Probably Stolen/
 ```
 
 - **Assemblies**：必填。游戏要加载的 DLL，以相对于模组文件夹的路径填写，每个 `<Assembly>` 一条，按加载顺序排列。文件夹中的其他任何 DLL 都会导致启用被拒绝（已启用的模组也不会加载），直到把它列出或删除，因为运行时会不经扫描直接加载它。与游戏或框架程序集同名的 DLL（`0Harmony`、`Assembly-CSharp`、`UnityEngine.*`、`Steamworks.NET` 等）会被拒绝。
-- **Capabilities**：必填，通常为空（`<Capabilities />`）。声明你的代码在游戏 API 之外做了什么：`files`、`network`、`process`、`dynamic-code`、`native`、`reflection-external`。玩家启用你的模组时，游戏会扫描你的 DLL：用到却未声明的能力会导致启用被拒绝，已声明的能力会在玩家确认前展示给玩家。用控制台命令 `mod-scan <你的模组ID>` 自查。详情：[能力声明与扫描器](ModdingGuide.zh-CN.md#能力声明与扫描器)。
+- **Capabilities**：必填，通常为空（`<Capabilities />`）。声明你的代码在游戏 API 之外做了什么：`files`、`network`、`process`、`steam`、`steam-auth`。另有四种正在退出（`dynamic-code`、`native`、`reflection-external`、`threads`：今天带警告接受，2026 年 12 月 10 日起拒绝），并且从那天起，声明了 `files` 或 `network` 的创意工坊模组只有在开发者验证之后才会加载。玩家启用你的模组时，游戏会扫描你的 DLL：用到却未声明的能力会导致启用被拒绝，已声明的能力会在玩家确认前展示给玩家。用控制台命令 `mod-scan <你的模组ID>` 自查。详情：[能力声明与扫描器](ModdingGuide.zh-CN.md#能力声明与扫描器)。
 
 ### 编写模组
 

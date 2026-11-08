@@ -60,6 +60,7 @@ This guide covers advanced topics for mod development and assumes you have alrea
     - [Checking before you publish](#checking-before-you-publish)
     - [What players see](#what-players-see)
     - [Developer mode](#developer-mode)
+    - [Verification for Workshop mods that use files or the internet](#verification-for-workshop-mods-that-use-files-or-the-internet)
     - [Reading and writing files without the capability](#reading-and-writing-files-without-the-capability)
     - [Proving the player's Steam identity to your server](#proving-the-players-steam-identity-to-your-server)
   - [Steam Workshop](#steam-workshop)
@@ -70,6 +71,9 @@ This guide covers advanced topics for mod development and assumes you have alrea
     - [Prefix: run code before the original](#prefix-run-code-before-the-original)
     - [Finalizer: run code even when the original throws](#finalizer-run-code-even-when-the-original-throws)
     - [Transpiler: rewrite the original method's IL (advanced)](#transpiler-rewrite-the-original-methods-il-advanced)
+  - [Reflection](#reflection)
+  - [Depending on another mod](#depending-on-another-mod)
+  - [Background work](#background-work)
   - [Troubleshooting](#troubleshooting)
 
 ---
@@ -237,7 +241,7 @@ Player saves are permanent and belong to the player. As a mod author, you are re
 - **Modded deals for the Underground Exchange**: adding new deals to the Underground Exchange
 - **Inspectable items**: there is no API to register new ones (appraisal items have one, see [Appraisal Items](#appraisal-items))
 
-Unsupported features may become supported in a later update. Anything in this list can still be attempted with Harmony patches. Expect to maintain it yourself after each game update, and keep the [capability rules](#capabilities-and-the-scanner) in mind: patches on game code are free, but reflection into engine or system types is a declared capability.
+Unsupported features may become supported in a later update. Anything in this list can still be attempted with Harmony patches. Expect to maintain it yourself after each game update, and keep the [capability rules](#capabilities-and-the-scanner) in mind: patches on game code and reflection on game types are free, reflection into engine or system types is not (see [Reflection](#reflection)).
 
 ---
 
@@ -1077,7 +1081,7 @@ Rules:
 - **Register in `Init` or `OnEnable`**, before the player opens New Game. Keep ids stable and unique (prefix them with your mod id): the pick is saved in the run under the id, and a save made with a perk whose mod is gone keeps the id without effect.
 - **Cost.** The player has 3 points and 4 slots. A positive perk costs points (`cost` above zero), a negative one grants them (`cost` below zero), a neutral one is free (`cost` 0, `StartingPerkType.NEUTRAL`). `extraPerkSlots` adds slots when picked, like Colorful Character. `incompatiblePerks` lists perk ids that cannot be picked together with yours (vanilla ids are the `StartingPerkList` constants).
 - **The effect is yours.** The game only records the pick. Read it with `ModHelper.IsStartingPerkActive(id)` (or `GetStartingPerkIds()`) from `ModHook.OnNewGameStarted` and `ModHook.OnGameLoaded*`, and apply whatever the perk does.
-- **Icon.** `iconKey` goes through the same lookup as `AddImage` (`"modId:spriteName"`). The vanilla icons are white 32x32 glyphs; the screen draws them at 2x and tints them green (positive), red (negative) or amber (neutral). Without one the generic perk icon is shown.
+- **Icon.** `iconKey` goes through the same lookup as `AddImage` (`"modId:spriteName"`). The vanilla icons are white 32x32 glyphs; the screen draws them at 2x and tints them green (positive), red (negative) or amber (neutral). Without one the generic perk icon is shown. The same icon appears on the calendar's Status strip, in the run summary and in the Mind Reprogrammer window.
 - `mindEditable: true` lets the Mind Reprogrammer add or remove the perk mid-run, like the vanilla perks of the mind.
 - Text providers are resolved whenever the tooltip opens, so `() => ModHelper.GetLocalized(...)` follows the locale.
 - `ModHelper.OpenNewGamePerks()` / `CloseNewGamePerks()` open and close the window from your own code (main menu scene, after a scenario was chosen).
@@ -1141,7 +1145,7 @@ public void OnEnable()
         backgroundKey: "my_mod_id:black_dock_scene",  // the scene behind the panel (960x540 like the vanilla ones)
         ambienceId: "my_mod_id.dock",                 // registered below once your sounds are loaded
         isDiscovered: () => ModHelper.GetModDataBool("my_mod_id", "dock_found"),
-        onArrive: () => ModLog.Log("welcome to the dock"),
+        onArrive: () => log.Log("welcome to the dock"),     // log: your ModLog from Init
         buildPanel: builder =>
         {
             builder.AddLabel("The dock is quiet tonight.");
@@ -1317,16 +1321,17 @@ The other files in your folder are checked too: executables and scripts (`.exe`,
 
 | Capability | What triggers it | Capability-free alternative |
 |---|---|---|
-| `files` | `System.IO.File`, `FileStream`, `Directory`, `FileInfo`, `DirectoryInfo`, `StreamReader` / `StreamWriter` opened on a path, `XDocument` / `XmlDocument` / `XmlReader` / `XmlWriter` given a path, `ZipFile`, memory-mapped files, the Windows `Registry`, `ScreenCapture`, `AssetBundle.LoadFromFile` / `LoadFromFileAsync` / `RecompressAssetBundleAsync` (the rest of `AssetBundle`, including `LoadFromMemory` and `LoadAsset`, is free), `UnityEngine.Windows.File`; Easy Save: `ES3File`, `ES3Writer`, `ES3Reader`, `ES3Directory`, `ES3` methods that take a path or two strings (key and file), `new ES3Settings(path)` and `settings.path =` (keyed `ES3.Save(key, value)` is free) | `ModHelper.GetConfig` for settings, `SetModData` for run data, `ReadModFile*` and `*ModDataFile*` for files, `LoadModAssetBundle` for an asset bundle in your folder (see below) |
+| `files` | `System.IO.File`, `FileStream`, `Directory`, `FileInfo`, `DirectoryInfo` (as calls, as `typeof(...)` tokens and as generic arguments: `Activator.CreateInstance(typeof(FileStream), ...)` counts), `StreamReader` / `StreamWriter` opened on a path, `XDocument` / `XmlDocument` / `XmlReader` / `XmlWriter` given a path, `ZipFile`, memory-mapped files, the Windows `Registry`, `ScreenCapture`, `AssetBundle.LoadFromFile` / `LoadFromFileAsync` / `RecompressAssetBundleAsync` (the rest of `AssetBundle`, including `LoadFromMemory` and `LoadAsset`, is free), `UnityEngine.Windows.File`; Easy Save: `ES3File`, `ES3Writer`, `ES3Reader`, `ES3Directory`, `ES3` methods that take a path or two strings (key and file), `new ES3Settings(path)` and `settings.path =` (keyed `ES3.Save(key, value)` is free) | `ModHelper.GetConfig` for settings, `SetModData` for run data, `ReadModFile*` and `*ModDataFile*` for files, `LoadModAssetBundle` for an asset bundle in your folder (see below) |
 | `network` | `System.Net.*` (`HttpClient`, `WebClient`, sockets; not `WebUtility` or `IPAddress`), `UnityWebRequest`, `WWW`, `Ping`, Steam HTTP and networking APIs | none, declare it |
 | `process` | `Application.OpenURL` with a literal `http://` or `https://` address (a link to your mod's page or documentation). Starting programs is never allowed, see below | `SteamFriends.ActivateGameOverlayToWebPage` under `steam` opens the link in the overlay instead |
-| `dynamic-code` | `Assembly.Load*`, `AppDomain.Load`, `Reflection.Emit`, `Activator.CreateInstanceFrom`, `Activator.CreateInstance(assemblyName, ...)`, compiling expression trees (`Expression.Compile()`), `BinaryFormatter` and the other `Formatters` deserialisers, `CSharpCodeProvider` | none, declare it |
-| `native` | `DllImport`, `unsafe` code and pointers, `calli`, `Marshal`, `UnsafeUtility` | none, declare it |
-| `reflection-external` | `Type.GetType`, `GetMethod` / `GetField` / `GetProperty` / `InvokeMember`, `Assembly.GetType` / `GetTypes`, `AccessTools` or `Traverse` with a **computed** name or type, or with a literal name under `System.`, `UnityEngine.`, `HarmonyLib.`, `Steamworks.`, `ES3`; the C# `dynamic` keyword (it compiles to the runtime binder) | reflect on game types with `typeof(GameItem)` or a literal game type name: that is free |
+| `dynamic-code` **(deprecated, refused by the December 10, 2026 game update)** | `Assembly.Load*`, `AppDomain.Load`, `Reflection.Emit`, `Activator.CreateInstanceFrom`, `Activator.CreateInstance(assemblyName, ...)`, compiling expression trees (`Expression.Compile()`), `BinaryFormatter` and the other `Formatters` deserialisers, `CSharpCodeProvider`. Not counted: the `OpCode` / `OpCodes`, `Label`, `LocalBuilder` and `ILGenerator` a Harmony transpiler handles (they generate nothing without a `DynamicMethod` or `TypeBuilder`), so ordinary transpilers need no capability. Code that arrives at runtime is code the scanner never saw, so the capability is on its way out like `reflection-external` | compiled expression trees for speed: `ModReflect.Method<TDelegate>` (a bound delegate, looked up once); `Newtonsoft.Json` and `JsonUtility` without `TypeNameHandling` were always free; a scripting or plugin framework cannot ship on the Workshop |
+| `native` **(deprecated, refused by the December 10, 2026 game update)** | `DllImport`, `unsafe` code and pointers, `calli`, `Marshal`, `UnsafeUtility`. A native call can do anything without a name the scanner can check, so the capability is on its way out like `reflection-external` | none: a game mod does not need native code. If a game feature is only reachable natively, ask for a `ModHelper` entry point |
+| `reflection-external` **(deprecated, refused by the December 10, 2026 game update)** | `Type.GetType`, `GetMethod` / `GetField` / `GetProperty` / `InvokeMember`, `Assembly.GetType` / `GetTypes`, `AccessTools` or `Traverse` with a **computed** name or type (`someObject.GetType()`, a string built at runtime), or with a literal type under `System.`, `UnityEngine.`, `HarmonyLib.`, `Steamworks.`, `ES3` whose member name is not a literal either (the UI namespaces `UnityEngine.UI`, `TMPro` and `UnityEngine.EventSystems` are free; a literal type with a literal member, `typeof(List<GameItem>).GetConstructor(...)` or `AccessTools.Method(typeof(string), "Concat")`, is judged like a direct call to that member: free unless the member is one the rules refuse or charge for, so transpilers can fetch the BCL members they need; `System.Type`, `System.Reflection.*` and Harmony's own helpers stay reflection-external); the C# `dynamic` keyword (it compiles to the runtime binder). The scanner cannot read what such code reaches, so the capability is on its way out: `mod-scan` and the Mods menu warn now, and the December 10, 2026 game update refuses it outright | `typeof(GameItem)` or a literal game type name is free; for everything else see [Reflection](#reflection) (`ModReflect`) and [Depending on another mod](#depending-on-another-mod) |
 | `steam` | Any Steamworks.NET API call through the player's Steam session: `SteamUserStats`, `SteamFriends`, `SteamUtils`, `SteamApps`, `SteamUser.GetSteamID`, Workshop queries on `SteamUGC`, `Callback<T>` / `CallResult<T>`. Structs and enums such as `CSteamID` or `PublishedFileId_t` are free. Workshop writes, account tokens and chat are never allowed (see below) | `ModWorkshop` and the Mods menu for what the game already does with the Workshop; none otherwise, declare it |
 | `steam-auth` | `ModHelper.RequestSteamAuthTicket` and `CancelSteamAuthTicket`: a Steam auth session ticket the game issues for a server of your own, so it can confirm with Steam who the player is and that they own the game (see [Proving the player's Steam identity to your server](#proving-the-players-steam-identity-to-your-server)). Not part of `steam`, and `steam` is not part of it | none, declare it |
+| `threads` **(deprecated, refused by the December 10, 2026 game update)** | Code that would keep running after the game switches your mod off: `new Thread` / `Thread.Start`, `ThreadPool.QueueUserWorkItem`, `System.Threading.Timer`, `System.Timers.Timer`, `Task.Run`, `new Task`, `Task.Start`, `Task.Delay`, `ContinueWith`, `Task.Factory.StartNew`, `Parallel.*`, and `StartCoroutine` / `Invoke` / `InvokeRepeating` on a MonoBehaviour that is not your own (`this` inside your component is fine). A blocked mod must stop within the frame, and nothing can stop a thread it started | `ModHelper.StartCoroutine`, `Delay` and `RunInBackground`, which the loader cancels when it stops the mod (see [Background work](#background-work)) |
 
-Only the game's own types (`Assembly-CSharp`) and your own are free for reflection. The scanner follows the IL back to the instruction that produced the type or the name; when it cannot tell (the value came through a variable, a branch, a method call), it counts as computed, so prefer `AccessTools.Method(typeof(PlayerStore), "ModCash")` over `AccessTools.Method("PlayerStore:ModCash")` built from strings, and `typeof(X)` over `someObject.GetType()`.
+Only the game's own types (`Assembly-CSharp`), your own, your prerequisites' and the UI namespaces above are free for reflection. The scanner follows the IL back to the instruction that produced the type or the name, through a local assigned once (`Type t = typeof(X); t.GetMethod(...)`) and through the stack copies the compiler makes; when it cannot tell (the value came through a method call, a parameter, a `PropertyType`, a local assigned in several places, a branch), it counts as computed, so prefer `AccessTools.Method(typeof(PlayerStore), "ModCash")` over `AccessTools.Method("PlayerStore:ModCash")` built from strings, and `typeof(X)` over `someObject.GetType()`. `typeof(GameType).Assembly.GetType("OtherGameType")` followed by a lookup on the result is read through the literal and is free, like `Type.GetType("literal")`; a `Type` from a `PropertyType`, a parameter or a local assigned in several places is not, and `ModReflect` is the way to use it. `AccessTools.TypeByName("Name")` with a bare name is free only when the game or your mod has a type of that name (Harmony finds `System` types by bare name too, so an unknown bare name is treated as computed); use the namespaced name for anything else. When the type really is only known at runtime, use [`ModReflect`](#reflection): the game does the lookup and checks the target for you.
 
 Declaring more than you use is allowed; the player simply sees the longer list. Using more than you declare refuses the activation, with the list of what was found.
 
@@ -1334,24 +1339,29 @@ Declaring more than you use is allowed; the player simply sees the longer list. 
 
 Some patterns refuse the activation whatever the manifest says, because no legitimate mod needs them:
 
-- starting another program: `System.Diagnostics.Process` and `ProcessStartInfo` anywhere in your code, and `Application.OpenURL` with anything but a literal web address (a computed string, a file path, another scheme). The game also blocks `Process.Start` from mod code while it runs: a mod caught doing it is stopped, deactivated, and that version can no longer be activated on that computer. No capability prompt can make that safe, so the call is simply refused;
+- starting another program: `System.Diagnostics.Process` and `ProcessStartInfo` anywhere in your code, and `Application.OpenURL` with anything but a literal web address (a computed string, a file path, another scheme). The game also blocks `Process.Start` from mod code while it runs: a mod caught doing it is stopped, deactivated, and that version can no longer be activated on that computer. The game also blocks `Application.OpenURL` with anything but a web address while it runs, from mod code or from a game method a mod transpiled. No capability prompt can make that safe, so the call is simply refused;
 - an embedded resource that is an executable, or any resource that looks encrypted (high entropy and not a known image, sound, text or `.resources` format);
 - string constants pointing at browser profiles, Steam login files, Discord data or crypto wallets;
 - a string constant of 1024 or more base64 characters (a hidden payload);
 - `Harmony.UnpatchAll()` with a literal `null` id, or any `Unpatch*` call with the id `"*"` (they remove every mod's patches, the game's own fixes included). Note that `harmony.Unpatch(original, HarmonyPatchType.All)` uses `"*"` by default: pass your own id, `harmony.Unpatch(original, HarmonyPatchType.All, harmony.Id)`. An id starting with `dse.` (the game's own patches) is refused as well;
 - Harmony patches or reflection aimed at the game's mod loader or trust code: `ModLoader`, `ModTrust`, `ModTrustRecord`, `ModFingerprint`, `ModTrustList`, `ModScanner`, `ModCapability`, `ModSecurityDebug`, `ModSteamRules`, `ModSteamGuard`, `ModSteamAuth`, `ModWorkshop`, `SteamManager`, `PaperBookRegistry`, or at the Steamworks types `SteamUGC`, `SteamRemoteStorage`, `SteamUser`, `SteamFriends`, `SteamMatchmaking`, `SteamAPI`, `SteamClient`, `SteamGameServer*` and the bindings behind them;
-- `ES3` writes on the keys that hold the player's approvals and mod order (`modTrust`, `modOrder`, `workshopOwners`, the disclaimer key); reading them is fine;
+- `ES3` writes on the keys that hold the player's approvals and mod order (`modTrust`, `modTrustMac`, `modOrder`, `workshopOwners`, the disclaimer key); reading them is fine;
+- calling the trust layer's own writes: `ModLoader.SetModEnabled`, `ReorderMods`, `ForgetMod`, `ApproveAndEnable`, `SetDeveloperMode`, `ModTrust.Approve`, `Refresh`, `Revoke`, `MarkStopped`, `SetDeveloperMode`, `StoreFolderHash`, `ModTrustList.LoadUnsigned`, `TryFetchBlocking`, `ModWorkshop.Unsubscribe`. Those belong to the player's clicks and the game; the game also refuses them at run time when a mod is on the call stack. Reading the loader (`ModLoader.Mods`, `IsModEnabled`, `ModTrust.Get`, `ModTrustList.Check`) is free, and `ModLoader.Mods` is a copy: adding or removing entries changes nothing;
+- from the December 10, 2026 update on, every `reflection-external`, `native`, `dynamic-code` and `threads` finding: the capabilities the scanner cannot see through, or cannot stop, stop being something a player can approve. That includes naming code in data and running it: COM activation (`Type.GetTypeFromProgID`, `GetTypeFromCLSID`, `Marshal.GetActiveObject`, `BindToMoniker`: a `WScript.Shell` starts programs without `Process` ever appearing in your code, counted as `reflection-external`) and Newtonsoft's `TypeNameHandling` set to anything but `None`, in settings or in a `[JsonProperty]` / `[JsonObject]` attribute (the deserialiser then instantiates whatever type the JSON names, counted as `dynamic-code`). Until that date they are warnings;
 - publishing or changing Steam Workshop items or Steam Cloud files from the game: every `SteamUGC` method that creates, updates, deletes, subscribes, downloads or unsubscribes an item (`CreateItem`, `StartItemUpdate`, `SetItem*`, `SubmitItemUpdate`, ...), and every `SteamRemoteStorage` write. Mods are published by their authors with steamcmd, never by the game on a player's account;
 - account access: `SteamUser` authentication and encrypted app tickets, store sign-in URLs and voice, `SteamFriends` and `SteamMatchmaking` chat messages and invites, `SteamAPI` (except `IsSteamRunning`), `SteamClient`, the game server APIs, a `DllImport` into a Steam library, and string constants naming Steam's native library files (`steam_api64.dll`) or their exported functions. The game also blocks these calls while it runs: a mod caught making one is stopped, deactivated, and that version can no longer be activated on that computer. The one exception is the auth session ticket the game issues itself for your own server through `ModHelper.RequestSteamAuthTicket`, under the `steam-auth` capability (see [below](#proving-the-players-steam-identity-to-your-server));
 - shipping your own `0Harmony`, MonoMod or Cecil, or any DLL named like a game assembly (including libraries the game already ships, such as `Newtonsoft.Json`). Reference the game's copies instead;
-- a DLL in your folder that `<Assemblies>` does not list, or a listed DLL that references an assembly which is neither the game's nor listed. The runtime would load such a file from your folder without the scan, so the whole mod is refused until the manifest lists it;
-- a DLL the scanner cannot read: a method body or a `[HarmonyPatch]` attribute it cannot decode refuses the mod rather than being skipped.
+- a DLL in your folder that `<Assemblies>` does not list, or a listed DLL that references an assembly which is neither the game's, nor listed, nor a listed assembly of an installed mod named in your `<Prerequisites>`. The runtime would load such a file from your folder without the scan, so the whole mod is refused until the manifest lists it;
+- a DLL the scanner cannot read: a method body or a `[HarmonyPatch]` attribute it cannot decode refuses the mod rather than being skipped;
+- from the same date, game methods marked `[ModRestricted]`, which do on the caller's behalf what the rules above refuse or charge for, whether you call them or patch them (a prefix that rewrites the path argument of a save method is the same act as calling it; until then `mod-scan` lists both as "files (from December 10, 2026)" and nothing is charged): every method of `SaveFiles` (the player's save folder: counted as `files`), `PaperEditorFiles.OpenFolder` / `OpenFile` and `ModUIManager.OpenModFolder` (a folder or file opened with the shell: refused like `Process`). The mark names the rule; `mod-scan` shows the reason. The list grows as such helpers are added to the game.
 
-Third-party libraries you bundle are scanned like your own code and must be listed. Many of them use reflection or `Reflection.Emit` internally, which then has to appear in your `<Capabilities>`; prefer libraries the game already ships. Embedded resources that are images, sounds, JSON, XML or `.resources` files are fine.
+Third-party libraries you bundle are scanned like your own code and must be listed. Many of them use reflection, `Reflection.Emit` or pointers internally, which today has to appear in your `<Capabilities>` and from December 10, 2026 refuses the mod; prefer libraries the game already ships (they are not scanned). Embedded resources that are images, sounds, JSON, XML or `.resources` files are fine.
 
 ### Checking before you publish
 
 Open the console (F8) and run `mod-scan <your_mod_id>` (any listed mod, active or not) or `mod-scan <path to a folder>`. It prints the listed assemblies, DLLs in the folder that are not listed, how many methods were scanned, the capabilities your manifest declares (`declared`), the capabilities the scanner detected (`detected`), each finding as `capability: Type.Method -> what it referenced`, any hard flag, an `ERROR:` line when a DLL could not be read, and a `fingerprint:` line, the hash of this exact version that approvals and the developers' lists refer to, followed by the hash of each listed DLL. Fix the manifest until `declared` covers `detected` and there are no hard flags. If a finding surprises you, the method name tells you where to look; most `reflection-external` findings go away by switching to `typeof(...)`.
+
+A `DEPRECATED` line names the capabilities the mod still uses among `reflection-external`, `native` and `dynamic-code`: they are accepted today and refused by the December 10, 2026 game update, so treat the line like a hard flag and fix the sites it lists ([Reflection](#reflection), the capability table above).
 
 Two more commands help while testing as a player would: `mod-trust` lists the approvals recorded on this computer (hashes, capabilities, developer mode, and for Workshop mods the item and publisher ids) and the trust state of every mod this session; `mod-trust-list` shows the state of the developers' remote list. The F8 console is Quantum Console: `user-commands` lists the game's own commands (`loot-list`, `mod-scan`, ...) and `all-commands` everything, including the engine-level ones.
 
@@ -1361,14 +1371,20 @@ Two more commands help while testing as a player would: `mod-trust` lists the ap
 
 - **Activating** a mod with an empty `<Capabilities>` just works. A mod with declared capabilities shows the player a confirmation listing them in plain words ("Access the internet", "Start other programs or open links", ...) and warning that such a mod can do anything they can; a version the developers have put on their verified list skips that prompt. A refused mod shows why.
 - The detail pane shows your capabilities and the approval state: approved on this date, updated without new capabilities, verified by the developers, or why it was not loaded.
-- **Updating**: identical files load. Changed files that gain no capability load, and the pane notes the update. Changed files that gain a capability, or a new version that fails the scan, do not load; the row shows a warning and the pane offers **Review and enable**, which runs the activation checks again. Plan your capabilities before the first release: adding one later interrupts every player.
+- **Updating**: identical files load. Changed files that gain no capability load, and the pane notes the update. Changed files that gain a capability, or a new version that fails the scan, do not load; the row shows a warning and the pane offers **Review and enable**, which runs the activation checks again. Plan your capabilities before the first release: adding one later interrupts every player. The approval covers every file in the folder, not only the DLLs: an update that only swaps data files or textures is checked again too (the folder scan, nothing else), so a payload cannot arrive next to an approved DLL.
 - **Deactivating** withdraws the approval; the next activation goes through the checks again.
-- A mod on the remote **block list** cannot be activated, and on the machines where it is active it is switched off for the next start, with the reason shown (a copy already running keeps running until that restart). In an emergency the developers can pause all mod loading until a fix ships; the Mods menu says so and the pane reads "Not loaded: mod loading is paused by the developers".
+- A mod on the remote **block list** cannot be activated, and on the machines where it is active it is stopped at once and switched off for the next start, with the reason shown. Stopping means: its Harmony patches are removed, its hook subscriptions dropped, the MonoBehaviours of its own types destroyed, its `ModHelper` coroutines and background work cancelled, what it exposed to other mods forgotten. Only game delegates the mod assigned by hand (an item's `onActivateSlotItemFunc`) still point at its code. In an emergency the developers can pause all mod loading until a fix ships; the Mods menu says so and the pane reads "Not loaded: mod loading is paused by the developers".
 - The first time the Mods menu opens, the game still tells the player that mods can contain code.
 
 ### Developer mode
 
 While you work on a local mod (in `Mods/`), every rebuild changes the hashes. Once the mod has been activated once, the detail pane shows a **Developer mode** button for local mods: turn it on and every rebuild of that folder loads at start without a new approval, even when the new build uses capabilities you have not declared yet (the console only warns when the scan refused it outright). Two things it does not cover: a DLL in the folder that `<Assemblies>` does not list still stops the mod, and the next **Activate** or **Review and enable** still applies the full rules, so run `mod-scan` before you publish. It is per mod, per computer, and off by default. Workshop copies never have it, and a local folder taking over the id of a subscribed item has to be approved once as a local mod before the button appears.
+
+### Verification for Workshop mods that use files or the internet
+
+`files` and `network` together are everything a credential stealer needs, and a prompt alone has not kept players from approving them. So, **from the December 10, 2026 game update, a Workshop mod whose manifest declares `files` or `network` loads only once the developers have verified it**. Until then the Mods menu shows "Uses files or the internet and is not verified by the developers" on such mods, `mod-scan` prints a `VERIFICATION` line, and nothing else changes; after that date, activation is refused with "Such mods can only be activated once the developers have verified them" and already active copies stop loading until the entry exists.
+
+What to do: before you publish a mod that needs either capability, ask for verification in the modding channel with the Workshop item and what the mod reads, writes or talks to. The developers run `mod-scan`, read the methods that do the file or network work, and add your mod to the signed verified list, either this exact version (the next release needs a new review) or every version of your id (for modders whose releases are trusted as such). Verified mods also skip the capability prompt and show "Verified by the developers" in the Mods menu. Local folders in `Mods/` are never subject to this, so you develop and test without waiting. The best way to avoid the queue is to not need the capabilities: the `ModData` helpers cover files, and most mods have no reason to talk to the internet.
 
 ### Reading and writing files without the capability
 
@@ -1484,7 +1500,7 @@ Harmony is a runtime patching library that lets you inject code before, after, o
 
 You do not need to call `Harmony.PatchAll()` yourself. The game scans each loaded mod assembly and applies every `[HarmonyPatch]` class it finds. Just declare your patch classes (see below) and they will be active as soon as the mod is enabled.
 
-> ⚠️ **What the mod scanner thinks of patches.** Patching game code needs no declared capability. Three things are refused outright when the player activates the mod: patches aimed at the loader or trust code (`ModLoader`, `ModTrust*`, `ModFingerprint`, `ModScanner`, `ModCapability`, `ModSecurityDebug`), `Harmony.UnpatchAll()` called with a literal `null` id (it would remove every mod's patches), and shipping your own `0Harmony.dll`. Use the game's copy. The loader owns the `Harmony` instance that applied your patches (`ModLoader.Mods.Find(m => m.Manifest.ID == "my_mod_id").HarmonyInstance`, id `"mod.my_mod_id"`); if you create your own instance for patches applied by hand, unpatch with its own id, never with none. Reaching into Unity, .NET or Harmony internals through `AccessTools` or reflection, or building type and member names from strings at runtime, counts as the `reflection-external` capability; `typeof(GameType)` and literal game type names are free. Details: [Capabilities and the Scanner](#capabilities-and-the-scanner).
+> ⚠️ **What the mod scanner thinks of patches.** Patching game code needs no declared capability. A patch target outside the game is judged like a reflection target: `[HarmonyPatch(typeof(System.IO.File), "WriteAllBytes")]`, `[HarmonyPatch("UnityEngine.Application", "OpenURL")]` or a target fetched with `AccessTools.Method(typeof(SomeSystemType), ...)` is `reflection-external` (deprecated, refused from December 10, 2026); your own types, your prerequisites' and the UI namespaces `UnityEngine.UI`, `TMPro`, `UnityEngine.EventSystems` are free. A transpiler is judged by what it names: `CodeInstruction.Call(typeof(X), "Y")`, `ldtoken`, `AccessTools` and `typeof(X).GetMethod` follow the same rules as everywhere else, so emitting a call to a system method is refused where that method is named, not at run time. At run time, code that executes inside a method your transpiler rewrote counts as your code: the game's tripwires and the `ModHelper` ownership checks attribute it to your mod, so a transpiled game method that starts a program stops your mod the same way a direct call would. Three things are refused outright when the player activates the mod: patches aimed at the loader or trust code (`ModLoader`, `ModTrust*`, `ModFingerprint`, `ModScanner`, `ModCapability`, `ModSecurityDebug`), `Harmony.UnpatchAll()` called with a literal `null` id (it would remove every mod's patches), and shipping your own `0Harmony.dll`. Use the game's copy. The loader owns the `Harmony` instance that applied your patches (`ModLoader.Mods.Find(m => m.Manifest.ID == "my_mod_id").HarmonyInstance`, id `"mod.my_mod_id"`); if you create your own instance for patches applied by hand, unpatch with its own id, never with none. Reaching into Unity, .NET or Harmony internals through `AccessTools` or reflection, or building type and member names from strings at runtime, is the deprecated `reflection-external` capability, refused by the December 10, 2026 game update; `typeof(GameType)` and literal game type names are free, and `ModReflect.Target(type, "Method")` gives you a patch target for a method whose name you only know at runtime. Details: [Capabilities and the Scanner](#capabilities-and-the-scanner) and [Reflection](#reflection).
 
 ### Postfix: run code after the original
 
@@ -1565,6 +1581,106 @@ See the [Harmony documentation](https://harmony.pardeike.net/) for the full refe
 
 ---
 
+## Reflection
+
+Reflection on the game's types is free when the scanner can read the target: `typeof(PlayerStore).GetField("cash", ...)`, `AccessTools.Method(typeof(StoreClientManager), "GenerateClient")`, Harmony's `___privateField` injection, or a literal game type name. What the scanner cannot read, it cannot vouch for, so the rest is going away: a computed receiver (`someObject.GetType().GetField(...)`), a type or member name built at runtime, `Type.GetType` on anything under `System.`, `UnityEngine.` (the UI namespaces excepted), `HarmonyLib.`, `Steamworks.` or `ES3`, and the `dynamic` keyword. Today these are the `reflection-external` capability with a deprecation warning; the December 10, 2026 game update refuses them, together with `native` and `dynamic-code`, the two other capabilities the scanner cannot see through.
+
+**`ModReflect`** is the replacement. You give it the object or the name, the game looks the member up and checks, at the moment of the call, that the member's declaring type is one your mod may reach:
+
+- the game's own types, except the mod loader and trust types (`ModLoader`, `ModTrust*`, `ModScanner`, `ModSteam*`, `ModWorkshop`, `SteamManager`, `PaperBookRegistry`, `ModReflect` itself) and the Easy Save types;
+- your own assemblies;
+- the assemblies of the mods your manifest lists in `<Prerequisites>`, when they are running;
+- the engine UI namespaces `UnityEngine.UI`, `TMPro` and `UnityEngine.EventSystems`.
+
+The check follows base types: a private field that `MonoBehaviour` declares is out of reach even on a game subclass. Anything out of scope throws `ModReflectAccessException` (and logs one `[ModReflect]` warning per member), so does a member that does not exist, a read-only property on `Set`, or an ambiguous overload. Calls to `ModReflect` need no capability.
+
+```csharp
+// A private field of a game object, the object's exact type not known at compile time
+int stock = ModReflect.Get<int>(machine, "stockCount");
+ModReflect.Set(machine, "stockCount", stock + 1);
+
+// A private method, the overload chosen by the argument types (pass Type[] when it is ambiguous)
+ModReflect.Call(PlayerStore.Instance, "ModCash", 100, false);
+object result = ModReflect.Call(client, "Evaluate", new[] { typeof(GameItem), typeof(bool) }, item, true);
+
+// Static members, by type or by name
+var client = ModReflect.Get<StoreClientInstance>(PlayerStore.Instance, "currentClientInstance");
+bool inRun = ModReflect.GetStatic<bool>(typeof(PlayerStore), "HasInstance");
+ModReflect.CallStatic("GeneralHelper", "SetItemOwned", item, true);
+
+// A type named in your own config file (game, your mod, your prerequisites, the UI namespaces)
+Type behaviour = ModReflect.FindType(config.behaviourTypeName);
+object instance = ModReflect.New(behaviour, someArgument);
+
+// A bound delegate for code that runs every frame (the lookup happens once)
+var tick = ModReflect.Method<Action<float>>(machine, "Tick");
+tick(Time.deltaTime);
+
+// A Harmony target for a method you only know by name at runtime
+MethodBase target = ModReflect.Target(typeof(StoreClientManager), "GenerateClient");
+harmony.Patch(target, postfix: new HarmonyMethod(typeof(MyPatches), nameof(MyPatches.After)));
+```
+
+`Has(obj, "member")` tells you whether a field or property exists before you read it; `Types()` lists the game's types and `Types("other_mod")` a prerequisite's, for data-driven lookups. The generic overloads cast for you: `Get<T>` throws `ModReflectAccessException` when the value is not a `T`.
+
+What `ModReflect` does not do: reach `System.*` or non-UI `UnityEngine.*` members (ask for a `ModHelper` entry point for the specific need), or reach another mod that is not a prerequisite (list it, or use the message channel below). The console command `mod-reflect` lists every lookup the game refused this session, with the reason.
+
+## Depending on another mod
+
+List the mods yours needs in `<Prerequisites>`. Three things follow from that:
+
+- **You may reference their DLLs.** Add a `<Reference>` to the prerequisite's DLL in your `.csproj` and call its public API like any library. The scanner accepts the reference (it would otherwise be an `unlisted-reference` refusal), the loader loads prerequisites before the mods that name them, and your DLL's dependency resolves from the prerequisite's folder once that mod runs. Do not copy the prerequisite's DLL into your folder (an unlisted DLL refuses your mod, a listed copy is a second, unapproved version of their code).
+- **`ModReflect` reaches their types.** `ModReflect.FindType`, `Types("their_id")`, `Get`, `Call` and the rest treat a running prerequisite's assemblies like your own.
+- **The Mods menu shows the dependency** with a check or a cross, and the player sees a warning when a prerequisite is missing or inactive. A missing prerequisite is still a warning, not a refusal: a mod that only optionally integrates with another keeps loading, and a mod whose DLL actually needs the other's fails on its own with a load error naming the missing assembly.
+
+For loose coupling, when a hard reference is more than you want, two channels in `ModHelper` need no reflection and no dependency on either side:
+
+```csharp
+// The providing mod exposes an object under a key (an interface its DLL defines, or a plain delegate)
+ModHelper.Expose("provider_mod", "pricing", new PricingService());
+ModHelper.Expose("provider_mod", "bonus", (Func<GameItem, int>)ComputeBonus);
+
+// Another mod fetches it; null when the provider is not running or exposed nothing under the key
+var bonus = ModHelper.Lookup<Func<GameItem, int>>("provider_mod", "bonus");
+if (bonus != null) price += bonus(item);
+bool present = ModHelper.IsModRunning("provider_mod");
+
+// Fire-and-forget events on named channels: "senderId:channel"
+ModHelper.OnMessage("listener_mod", "provider_mod:sold", (sender, payload) => OnSold((GameItem)payload));
+ModHelper.SendMessage("provider_mod", "sold", item);   // only provider_mod may send on its own channels
+```
+
+A mod exposes only under its own id and sends only on its own channels (the mod on the call stack is checked, like the data folders); any mod may listen. `Lookup` has one rule: a service carries its provider's capabilities, so a mod gets a service only if its own manifest declares every capability the provider declares (a mod with no capabilities cannot borrow a file helper from a `files` mod; the refusal is logged once and `Lookup` returns null). A provider that wants to serve everyone exposes a service that needs no capability, or declares none itself. Handlers run inside their own try/catch like hook subscribers. When a mod is stopped by the loader, what it exposed and the handlers it registered are dropped, so a `Lookup` returns null from then on.
+
+## Background work
+
+When the developers block a mod, or pause all mods, the game stops it at once: patches, hooks, components, coroutines. A thread, timer or task the mod started itself cannot be stopped by anyone, which is why starting one is the `threads` capability, deprecated and refused from December 10, 2026. What you use instead runs on the game's behalf and ends with the mod:
+
+```csharp
+// A coroutine on the game's loader object; stopped when the mod is stopped. Each step runs in its own
+// try/catch: an exception ends the coroutine and is logged with your mod's name.
+Coroutine handle = ModHelper.StartCoroutine("my_mod", RefreshPrices());
+ModHelper.StopCoroutine("my_mod", handle);
+ModHelper.StopAllCoroutines("my_mod");
+
+// A delayed action, unscaled seconds
+ModHelper.Delay("my_mod", 2f, () => log.Log("two seconds later"));   // log: your ModLog from Init
+
+// Work on the thread pool, then a callback on the main thread. The token is cancelled when the mod is
+// stopped: check it in loops. The callback is dropped if the mod was stopped meanwhile.
+ModHelper.RunInBackground("my_mod", token =>
+{
+    for (int i = 0; i < 1000 && !token.IsCancellationRequested; i++) Crunch(i);
+}, onFinished: () => ApplyResults());
+
+// From inside background work: hand something to the main thread
+ModHelper.RunOnMainThread("my_mod", () => UpdateLabel());
+```
+
+Inside your own `MonoBehaviour` (a component you added to a game object), `this.StartCoroutine`, `Invoke` and `InvokeRepeating` stay free: the component is destroyed with the mod. The same calls on another object's MonoBehaviour (`ModLoader.Instance.StartCoroutine(...)`, a game manager) are `threads`, because that object outlives you. `async` methods are fine as long as they do not reach `Task.Run`, `Task.Delay` or `ContinueWith`; awaiting a `UnityWebRequest` under the `network` capability, for instance, needs none of them.
+
+---
+
 ## Troubleshooting
 
 Open the **F8 console** first: every mod logs its load result, asset counts, and how many Harmony methods it patched, all prefixed with `[ModLoader]` or your mod's name.
@@ -1574,16 +1690,21 @@ Open the **F8 console** first: every mod logs its load result, asset counts, and
 | Mod doesn't appear in the mod menu | The manifest is missing or malformed and the loader skipped the folder: no `manifest.xml` in the mod's root, an empty or invalid `<ID>` (letters, digits, `_`, `-`, `.` only), no `<Assemblies>` or `<Capabilities>` element, an `<Assemblies>` with no `<Assembly>` child, an assembly path that is rooted, contains `..` or does not end in `.dll`, an unknown capability name (all logged as `[ModLoader] ...`), or a listed DLL that does not exist or no listed DLL with a class implementing `IMod` (logged as `[Your Mod Name] Error: ...`). The launch log names the exact problem. |
 | Mod appears but nothing happens | The mod isn't enabled, or you didn't restart after enabling it. **Enabling, disabling, and reordering only take effect on the next launch.** |
 | Mod is active but shows a warning icon and "Not loaded: ..." | The trust check kept it out this start. *Not yet approved on this computer*: select it and use **Review and enable**. *Changed since you approved it (reason)*: your files changed in a way that needs a fresh approval; the reason is one of "the new version asks for new capabilities", "the new version uses capabilities it does not declare", "the new version was refused by the mod scanner", "its folder contains DLLs the manifest does not list", "it now comes from a different place than the approved copy" or "it is a different Workshop item" (local copy versus subscription), or "its files could not be checked" (a DLL locked by your build or an antivirus). Fix what it says, then **Review and enable**. *Blocked by the developers*: the version is on the remote block list. *Mod loading is paused by the developers*: an emergency pause for everyone, nothing to do on your side. While developing a local mod, turn on **Developer mode** in the detail pane so rebuilds are trusted without this step. |
-| Activation is refused: "uses capabilities its manifest does not declare" | Run `mod-scan <id>` in the F8 console: each finding names the method and the API it reaches. Either declare the capability in `<Capabilities>` or switch to a capability-free alternative (the table in [Declaring capabilities](#declaring-capabilities)). Most `reflection-external` findings disappear by using `typeof(GameType)` instead of a string. |
+| Activation is refused: "uses capabilities its manifest does not declare" | Run `mod-scan <id>` in the F8 console: each finding names the method and the API it reaches. Either declare the capability in `<Capabilities>` or switch to a capability-free alternative (the table in [Declaring capabilities](#declaring-capabilities)). Most `reflection-external` findings disappear by using `typeof(GameType)` instead of a string, the rest by going through [`ModReflect`](#reflection). |
+| The Mods menu shows "Uses capabilities the next game update refuses (...)" on my mod, or `mod-scan` prints a `DEPRECATED` line | Your mod uses, or its manifest declares, `reflection-external`, `native`, `dynamic-code` or `threads`. It still loads today; from the December 10, 2026 update on it will not. `mod-scan` lists every site: replace computed receivers with `typeof(...)`, runtime names with [`ModReflect`](#reflection), reflection into another mod with a `<Prerequisites>` reference, compiled expression trees with `ModReflect.Method<TDelegate>`, patches on engine or system methods with patches on game code, threads, timers and tasks with [`ModHelper.StartCoroutine` / `RunInBackground`](#background-work), drop `DllImport` and `unsafe` code, then remove the capabilities from `<Capabilities>` and publish the update before December 10, 2026. Until then, what this update's new rules find (threads, patch targets outside the game, COM activation, `TypeNameHandling`, `[ModRestricted]` helpers) does not block activation and is shown in the player's prompt; what the scanner detected before this update (`reflection-external`, `native`, `dynamic-code` through the rules that existed) still has to be declared, as it always did. |
+| Activation is refused: "declares capabilities mods can no longer use" | The game update that refuses `reflection-external`, `native`, `dynamic-code` and `threads` has landed and the manifest still declares one, or the code still uses one. Same fix as the row above. |
+| `mod-scan` names a game method with "(... named by the caller)" or "(opens a ... with the shell)" | The method carries `[ModRestricted]`: it does on your behalf what the rules refuse or charge for. The finding counts as the rule it names (`files`, or a `process` refusal). Use the `ModData` helpers for files, and do not open folders or files with the shell. |
+| `ModReflectAccessException: ... is out of reach` | The member's declaring type is outside your scope: an engine or system type (only `UnityEngine.UI`, `TMPro` and `UnityEngine.EventSystems` are reachable), a loader or Easy Save type, or another mod that is not in your `<Prerequisites>`. `mod-reflect` in the console lists the refusals with the reason. |
 | Activation is refused: "refused by the mod scanner" or "DLLs in its folder that its manifest does not list" | A hard refusal: an unlisted DLL in the folder or a reference to an assembly that is neither the game's nor listed, an embedded executable or encrypted resource, suspicious string constants, `UnpatchAll()` without an id, a patch on the loader, or a bundled `0Harmony`. `mod-scan` names it. See [Hard refusals](#hard-refusals). |
 | `[Your Mod Name] Error: ...` in the console, and a warning icon on your mod in the Mods menu | Your DLL failed to load (a library it references is missing, or it targets the wrong framework), a DLL carries the name of a game assembly, or `Init`, `OnEnable`, or a Harmony patch threw. The line names the exception and the full stack trace follows it. When a mod from the `Mods/` folder fails, the console opens on its own at launch (with `dev.txt` in place; Workshop mods only get the warning icon). The mod stays in the active list so you can deactivate it. |
 | Code changes don't take effect | You copied an old DLL. Rebuild (`dotnet build -c Release`); a project made with `create-mod.bat` installs itself into `Mods\`, otherwise copy the fresh DLL from `bin/Release/netstandard2.1/` into the mod folder. Then check the Mods menu: a rebuild changes the hashes, so without **Developer mode** the mod may wait for **Review and enable**. |
-| A library I bundle is refused or forces capabilities | Every DLL you ship must be listed in `<Assemblies>` and is scanned like your code. Libraries the game already ships (`0Harmony`, `Newtonsoft.Json`, Unity assemblies) must not be bundled at all; reference the game's copies. Other libraries that use `Reflection.Emit` or reflection internally make those capabilities yours to declare. |
+| A library I bundle is refused or forces capabilities | Every DLL you ship must be listed in `<Assemblies>` and is scanned like your code. Libraries the game already ships (`0Harmony`, `Newtonsoft.Json`, Unity assemblies) must not be bundled at all; reference the game's copies. Other libraries that use `Reflection.Emit`, reflection by name or pointers internally make those capabilities yours to declare today, and refuse the mod from December 10, 2026: pick a library that does not, or ship the feature without it. |
 | Item shows the "unknown" placeholder sprite | The `spriteKey` or mod ID passed to `SetSpriteAndShapeFromMod` doesn't match. The key is the **file name** (no extension, no folder); the ID is your manifest `<ID>`, **not** the folder name. Check the `item sprite(s) loaded` count in the console. |
 | A sprite file is ignored entirely | It isn't *directly* inside `Textures/Items/` (subfolders aren't scanned), or it isn't a `.png`/`.jpg`. |
 | `PlaySound` returns false / warning `Audio identifier ... was not found` | The mod ID or sound key doesn't match. The full identifier is `<manifest ID>:<file name without extension>`. Check the `sound(s) loaded` count in the console. Sounds also finish loading a few frames after startup ([wait for them](#knowing-when-your-assets-are-ready) if playing very early). |
 | `GetLocalized` returns the key itself | No entry for that key in the current locale's CSV or in `en.csv`, or the file name doesn't match the game's locale code. Look for the one-time `[ModHelper]` warning and check the `localization entries loaded` count in the console. |
 | `requires '<id>' which is not loaded/enabled` warning | Your manifest lists a `<Prerequisites>` mod that isn't enabled. Enable it, or drop the dependency. |
+| My mod references another mod's DLL and is refused with `unlisted-reference`, or fails to load with a missing assembly | The other mod must be listed in your `<Prerequisites>` and installed (the scanner accepts references to a prerequisite's listed DLLs only), and it must be active, since the loader resolves the DLL from the prerequisite's folder once that mod runs. Never copy its DLL into your folder. See [Depending on another mod](#depending-on-another-mod). |
 | Harmony patch never runs | The target type/method name is wrong, or the mod is disabled; patches are only applied to **enabled** mods, at launch. |
 | My item never drops | Run `loot-list <tableId>` in the console. If the entry is missing, the table ID is wrong or the edit was rejected (look for a `[LootRegistry]` warning naming your mod). If it is there, check the percentage: weight `10` in a vanilla table is about 1%. |
 | `[LootRegistry] ... which does not exist` warning | The table or group ID in your edit or JSON file does not match any table. `loot-list` prints every ID. When registering your own table, register it before patching or grouping it. |

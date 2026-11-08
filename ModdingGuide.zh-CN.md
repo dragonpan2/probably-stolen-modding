@@ -60,6 +60,7 @@ English version: [ModdingGuide.md](ModdingGuide.md)
     - [发布前自查](#发布前自查)
     - [玩家看到什么](#玩家看到什么)
     - [开发者模式](#开发者模式)
+    - [使用文件或互联网的创意工坊模组需要验证](#使用文件或互联网的创意工坊模组需要验证)
     - [不声明能力也能读写文件](#不声明能力也能读写文件)
     - [向你的服务器证明玩家的 Steam 身份](#向你的服务器证明玩家的-steam-身份)
   - [Steam 创意工坊](#steam-创意工坊)
@@ -70,6 +71,9 @@ English version: [ModdingGuide.md](ModdingGuide.md)
     - [Prefix：在原方法之前运行](#prefix在原方法之前运行)
     - [Finalizer：即使原方法抛出异常也会运行](#finalizer即使原方法抛出异常也会运行)
     - [Transpiler：改写原方法的 IL（进阶）](#transpiler改写原方法的-il进阶)
+  - [反射](#反射)
+  - [依赖另一个模组](#依赖另一个模组)
+  - [后台工作](#后台工作)
   - [故障排查](#故障排查)
 
 ---
@@ -237,7 +241,7 @@ public void OnDisable()
 - **地下交易所的模组交易**：向地下交易所添加新的交易
 - **可检视物品**：没有注册新类型的 API（鉴定物品已有，见[鉴定物品](#鉴定物品)）
 
-不支持的功能可能在以后的更新中得到支持。这个列表中的任何内容仍然可以尝试用 Harmony 补丁实现。请做好每次游戏更新后自行维护的准备，并记住[能力规则](#能力声明与扫描器)：对游戏代码打补丁是免费的，但反射进引擎或系统类型属于需要声明的能力。
+不支持的功能可能在以后的更新中得到支持。这个列表中的任何内容仍然可以尝试用 Harmony 补丁实现。请做好每次游戏更新后自行维护的准备，并记住[能力规则](#能力声明与扫描器)：对游戏代码打补丁和反射游戏类型是免费的，反射进引擎或系统类型则不是（见[反射](#反射)）。
 
 ---
 
@@ -1076,7 +1080,7 @@ public void OnDisable()
 - **在 `Init` 或 `OnEnable` 中注册**，要在玩家打开"新游戏"之前。保持 ID 稳定且唯一（加上你的模组 ID 前缀）：选择按 ID 保存在本局中，用某个天赋开局、而该模组之后被移除的存档会保留该 ID 但没有效果。
 - **点数。** 玩家有 3 点和 4 个栏位。正面天赋消耗点数（`cost` 大于零），负面天赋提供点数（`cost` 小于零），中性天赋免费（`cost` 为 0，`StartingPerkType.NEUTRAL`）。`extraPerkSlots` 在被选中时增加栏位，类似"多彩人物"。`incompatiblePerks` 列出不能与你的天赋同时选择的天赋 ID（原版 ID 是 `StartingPerkList` 的常量）。
 - **效果由你实现。** 游戏只记录选择。在 `ModHook.OnNewGameStarted` 和 `ModHook.OnGameLoaded*` 中用 `ModHelper.IsStartingPerkActive(id)`（或 `GetStartingPerkIds()`）读取，然后施加天赋的效果。
-- **图标。** `iconKey` 走与 `AddImage` 相同的查找（`"modId:spriteName"`）。原版图标是白色 32x32 的图形；界面以 2 倍绘制并按类型着色：绿色（正面）、红色（负面）或琥珀色（中性）。不提供时显示通用天赋图标。
+- **图标。** `iconKey` 走与 `AddImage` 相同的查找（`"modId:spriteName"`）。原版图标是白色 32x32 的图形；界面以 2 倍绘制并按类型着色：绿色（正面）、红色（负面）或琥珀色（中性）。不提供时显示通用天赋图标。同一图标也会出现在日历的"状态"天赋栏、本局总结和"心智重编程器"窗口中。
 - `mindEditable: true` 允许"心智重编程器"在游戏中途添加或移除该天赋，与原版的心智类天赋相同。
 - 文本提供函数在每次提示框打开时重新求值，所以 `() => ModHelper.GetLocalized(...)` 能跟随语言切换。
 - `ModHelper.OpenNewGamePerks()` / `CloseNewGamePerks()` 可从你自己的代码打开和关闭该窗口（主菜单场景，选好起始方案之后）。
@@ -1140,7 +1144,7 @@ public void OnEnable()
         backgroundKey: "my_mod_id:black_dock_scene",  // 面板背后的场景（与原版一样为 960x540）
         ambienceId: "my_mod_id.dock",                 // 声音加载完成后在下方注册
         isDiscovered: () => ModHelper.GetModDataBool("my_mod_id", "dock_found"),
-        onArrive: () => ModLog.Log("welcome to the dock"),
+        onArrive: () => log.Log("welcome to the dock"),     // log：你在 Init 里创建的 ModLog
         buildPanel: builder =>
         {
             builder.AddLabel("今晚的码头很安静。");
@@ -1316,16 +1320,17 @@ public class MyMod : IMod
 
 | 能力 | 触发条件 | 无需能力的替代方案 |
 |---|---|---|
-| `files` | `System.IO.File`、`FileStream`、`Directory`、`FileInfo`、`DirectoryInfo`、以路径打开的 `StreamReader` / `StreamWriter`、传入路径的 `XDocument` / `XmlDocument` / `XmlReader` / `XmlWriter`、`ZipFile`、内存映射文件、Windows 注册表（`Registry`）、`ScreenCapture`、`AssetBundle.LoadFromFile` / `LoadFromFileAsync` / `RecompressAssetBundleAsync`（`AssetBundle` 的其余成员，包括 `LoadFromMemory` 和 `LoadAsset`，是免费的）、`UnityEngine.Windows.File`；Easy Save：`ES3File`、`ES3Writer`、`ES3Reader`、`ES3Directory`、带路径或两个字符串（键和文件）的 `ES3` 方法、`new ES3Settings(path)` 和 `settings.path =`（按键的 `ES3.Save(key, value)` 是免费的） | 设置用 `ModHelper.GetConfig`，局内数据用 `SetModData`，文件用 `ReadModFile*` 和 `*ModDataFile*`，模组文件夹里的资源包用 `LoadModAssetBundle`（见下文） |
+| `files` | `System.IO.File`、`FileStream`、`Directory`、`FileInfo`、`DirectoryInfo`（作为调用、作为 `typeof(...)` 标记以及作为泛型参数都算：`Activator.CreateInstance(typeof(FileStream), ...)` 也计入）、以路径打开的 `StreamReader` / `StreamWriter`、传入路径的 `XDocument` / `XmlDocument` / `XmlReader` / `XmlWriter`、`ZipFile`、内存映射文件、Windows 注册表（`Registry`）、`ScreenCapture`、`AssetBundle.LoadFromFile` / `LoadFromFileAsync` / `RecompressAssetBundleAsync`（`AssetBundle` 的其余成员，包括 `LoadFromMemory` 和 `LoadAsset`，是免费的）、`UnityEngine.Windows.File`；Easy Save：`ES3File`、`ES3Writer`、`ES3Reader`、`ES3Directory`、带路径或两个字符串（键和文件）的 `ES3` 方法、`new ES3Settings(path)` 和 `settings.path =`（按键的 `ES3.Save(key, value)` 是免费的） | 设置用 `ModHelper.GetConfig`，局内数据用 `SetModData`，文件用 `ReadModFile*` 和 `*ModDataFile*`，模组文件夹里的资源包用 `LoadModAssetBundle`（见下文） |
 | `network` | `System.Net.*`（`HttpClient`、`WebClient`、套接字；`WebUtility` 和 `IPAddress` 除外）、`UnityWebRequest`、`WWW`、`Ping`、Steam 的 HTTP 与网络 API | 无，请声明 |
 | `process` | 参数为字面 `http://` 或 `https://` 网址的 `Application.OpenURL`（指向你的模组页面或文档的链接）。启动程序永远不被允许，见下文 | `steam` 能力下的 `SteamFriends.ActivateGameOverlayToWebPage` 可改为在游戏内覆盖界面中打开链接 |
-| `dynamic-code` | `Assembly.Load*`、`AppDomain.Load`、`Reflection.Emit`、`Activator.CreateInstanceFrom`、`Activator.CreateInstance(assemblyName, ...)`、编译表达式树（`Expression.Compile()`）、`BinaryFormatter` 及其他 `Formatters` 反序列化器、`CSharpCodeProvider` | 无，请声明 |
-| `native` | `DllImport`、`unsafe` 代码与指针、`calli`、`Marshal`、`UnsafeUtility` | 无，请声明 |
-| `reflection-external` | `Type.GetType`、`GetMethod` / `GetField` / `GetProperty` / `InvokeMember`、`Assembly.GetType` / `GetTypes`、使用**拼接出的**名称或类型的 `AccessTools` 或 `Traverse`，或者字面名称位于 `System.`、`UnityEngine.`、`HarmonyLib.`、`Steamworks.`、`ES3` 之下；C# 的 `dynamic` 关键字（它编译为运行时绑定器） | 用 `typeof(GameItem)` 或游戏类型的字面名称反射游戏类型：这是免费的 |
+| `dynamic-code` **（已弃用，2026 年 12 月 10 日的游戏更新将拒绝）** | `Assembly.Load*`、`AppDomain.Load`、`Reflection.Emit`、`Activator.CreateInstanceFrom`、`Activator.CreateInstance(assemblyName, ...)`、编译表达式树（`Expression.Compile()`）、`BinaryFormatter` 及其他 `Formatters` 反序列化器、`CSharpCodeProvider`。不计入：Harmony Transpiler 处理的 `OpCode` / `OpCodes`、`Label`、`LocalBuilder` 和 `ILGenerator`（没有 `DynamicMethod` 或 `TypeBuilder` 它们生成不了任何东西），所以普通的 Transpiler 不需要任何能力。运行时才到来的代码是扫描器从未见过的代码，所以这项能力和 `reflection-external` 一样正在退出 | 为了性能而编译的表达式树：`ModReflect.Method<TDelegate>`（只查找一次的已绑定委托）；不带 `TypeNameHandling` 的 `Newtonsoft.Json` 和 `JsonUtility` 一直是免费的；脚本或插件框架无法在创意工坊上发布 |
+| `native` **（已弃用，2026 年 12 月 10 日的游戏更新将拒绝）** | `DllImport`、`unsafe` 代码与指针、`calli`、`Marshal`、`UnsafeUtility`。原生调用能在没有任何可供扫描器检查的名称的情况下做任何事，所以这项能力和 `reflection-external` 一样正在退出 | 无：游戏模组不需要原生代码。如果某个游戏功能只能通过原生代码触及，请申请一个 `ModHelper` 入口 |
+| `reflection-external` **（已弃用，2026 年 12 月 10 日的游戏更新将拒绝）** | `Type.GetType`、`GetMethod` / `GetField` / `GetProperty` / `InvokeMember`、`Assembly.GetType` / `GetTypes`、使用**拼接出的**名称或类型的 `AccessTools` 或 `Traverse`（`someObject.GetType()`、运行时拼出的字符串），或者字面类型位于 `System.`、`UnityEngine.`、`HarmonyLib.`、`Steamworks.`、`ES3` 之下且成员名也不是字面量（UI 命名空间 `UnityEngine.UI`、`TMPro` 和 `UnityEngine.EventSystems` 是免费的；字面类型加字面成员，如 `typeof(List<GameItem>).GetConstructor(...)` 或 `AccessTools.Method(typeof(string), "Concat")`，按对该成员的直接调用来判断：除非该成员是规则拒绝或收取能力的，否则免费，所以 Transpiler 可以取得它需要的 BCL 成员；`System.Type`、`System.Reflection.*` 和 Harmony 自己的辅助类型仍属于 reflection-external）；C# 的 `dynamic` 关键字（它编译为运行时绑定器）。扫描器无法读取这种代码触及了什么，所以这项能力正在退出：`mod-scan` 和模组菜单现在会警告，2026 年 12 月 10 日的游戏更新将直接拒绝它 | `typeof(GameItem)` 或游戏类型的字面名称是免费的；其他情况见[反射](#反射)（`ModReflect`）和[依赖另一个模组](#依赖另一个模组) |
 | `steam` | 通过玩家的 Steam 会话调用任何 Steamworks.NET API：`SteamUserStats`、`SteamFriends`、`SteamUtils`、`SteamApps`、`SteamUser.GetSteamID`、`SteamUGC` 上的创意工坊查询、`Callback<T>` / `CallResult<T>`。`CSteamID`、`PublishedFileId_t` 等结构体和枚举是免费的。创意工坊写入、账户令牌和聊天永远不被允许（见下文） | 游戏已经通过 `ModWorkshop` 和模组菜单处理创意工坊；其他情况没有替代，请声明 |
 | `steam-auth` | `ModHelper.RequestSteamAuthTicket` 和 `CancelSteamAuthTicket`：游戏为你自己的服务器签发的 Steam 身份验证会话票证，让服务器能向 Steam 确认玩家是谁、是否拥有本游戏（见[向你的服务器证明玩家的 Steam 身份](#向你的服务器证明玩家的-steam-身份)）。不包含 `steam`，`steam` 也不包含它 | 无，请声明 |
+| `threads` **（已弃用，2026 年 12 月 10 日的游戏更新将拒绝）** | 在游戏关闭你的模组之后仍会继续运行的代码：`new Thread` / `Thread.Start`、`ThreadPool.QueueUserWorkItem`、`System.Threading.Timer`、`System.Timers.Timer`、`Task.Run`、`new Task`、`Task.Start`、`Task.Delay`、`ContinueWith`、`Task.Factory.StartNew`、`Parallel.*`，以及在不属于你自己的 MonoBehaviour 上调用 `StartCoroutine` / `Invoke` / `InvokeRepeating`（在你自己的组件里用 `this` 调用没有问题）。被封禁的模组必须在当帧内停止，而没有人能停止它自己启动的线程 | `ModHelper.StartCoroutine`、`Delay` 和 `RunInBackground`，加载器停止模组时会一并取消它们（见[后台工作](#后台工作)） |
 
-只有游戏自己的类型（`Assembly-CSharp`）和你自己的类型可以自由反射。扫描器会沿 IL 回溯到产生类型或名称的那条指令；无法判断时（值来自变量、分支、方法调用）按"拼接"处理，所以请优先写 `AccessTools.Method(typeof(PlayerStore), "ModCash")` 而不是用字符串拼出的 `AccessTools.Method("PlayerStore:ModCash")`，优先用 `typeof(X)` 而不是 `someObject.GetType()`。
+只有游戏自己的类型（`Assembly-CSharp`）、你自己的类型、你的前置模组的类型和上面提到的 UI 命名空间可以自由反射。扫描器会沿 IL 回溯到产生类型或名称的那条指令，可以穿过只赋值一次的局部变量（`Type t = typeof(X); t.GetMethod(...)`）和编译器生成的栈上副本；无法判断时（值来自方法调用、参数、`PropertyType`、多处赋值的局部变量、分支）按"拼接"处理，所以请优先写 `AccessTools.Method(typeof(PlayerStore), "ModCash")` 而不是用字符串拼出的 `AccessTools.Method("PlayerStore:ModCash")`，优先用 `typeof(X)` 而不是 `someObject.GetType()`。`typeof(游戏类型).Assembly.GetType("另一个游戏类型")` 之后对结果的查找按字面名称读取，和 `Type.GetType("字面名")` 一样免费；来自 `PropertyType`、参数或多处赋值的局部变量的 `Type` 则不是，此时该用 `ModReflect`。使用裸名称的 `AccessTools.TypeByName("Name")` 只有当游戏或你的模组确实有这个名字的类型时才免费（Harmony 也能按裸名称找到 `System` 类型，所以未知的裸名称按拼接处理）；其他情况请用带命名空间的名称。当类型确实只有运行时才知道时，用 [`ModReflect`](#反射)：由游戏替你查找并检查目标。
 
 多声明是允许的，玩家只是会看到更长的列表。用到却没声明会导致启用被拒绝，并列出发现的内容。
 
@@ -1333,24 +1338,29 @@ public class MyMod : IMod
 
 有些模式无论清单怎么写都会拒绝启用，因为正常模组不需要它们：
 
-- 启动其他程序：代码中任何位置的 `System.Diagnostics.Process` 和 `ProcessStartInfo`，以及参数不是字面网址（拼接出的字符串、文件路径、其他协议）的 `Application.OpenURL`。游戏运行时也会拦截来自模组代码的 `Process.Start`：被发现这样做的模组会被停止并停用，该版本在这台电脑上再也无法启用。任何能力提示都无法让这种行为变得安全，所以这个调用直接被拒绝；
+- 启动其他程序：代码中任何位置的 `System.Diagnostics.Process` 和 `ProcessStartInfo`，以及参数不是字面网址（拼接出的字符串、文件路径、其他协议）的 `Application.OpenURL`。游戏运行时也会拦截来自模组代码的 `Process.Start`：被发现这样做的模组会被停止并停用，该版本在这台电脑上再也无法启用。任何能力提示都无法让这种行为变得安全，游戏运行时还会拦截参数不是网址的 `Application.OpenURL`，无论来自模组代码还是模组用 Transpiler 改写过的游戏方法。所以这个调用直接被拒绝；
 - 嵌入资源是可执行文件，或任何看起来像加密数据的资源（高熵且不是已知的图片、音频、文本或 `.resources` 格式）；
 - 指向浏览器配置、Steam 登录文件、Discord 数据或加密货币钱包的字符串常量；
 - 1024 个或更多 base64 字符组成的字符串常量（隐藏的载荷）；
 - 传入字面 `null` id 的 `Harmony.UnpatchAll()`，或 id 为 `"*"` 的任何 `Unpatch*` 调用（它们会移除所有模组的补丁，包括游戏自己的修复）。注意 `harmony.Unpatch(original, HarmonyPatchType.All)` 默认使用 `"*"`：请传入你自己的 id，即 `harmony.Unpatch(original, HarmonyPatchType.All, harmony.Id)`。以 `dse.` 开头的 id（游戏自己的补丁）同样会被拒绝；
 - 针对游戏模组加载器或信任代码的 Harmony 补丁或反射：`ModLoader`、`ModTrust`、`ModTrustRecord`、`ModFingerprint`、`ModTrustList`、`ModScanner`、`ModCapability`、`ModSecurityDebug`、`ModSteamRules`、`ModSteamGuard`、`ModSteamAuth`、`ModWorkshop`、`SteamManager`、`PaperBookRegistry`，或针对 Steamworks 类型 `SteamUGC`、`SteamRemoteStorage`、`SteamUser`、`SteamFriends`、`SteamMatchmaking`、`SteamAPI`、`SteamClient`、`SteamGameServer*` 及其背后的绑定；
-- 对保存玩家批准记录和模组顺序的键（`modTrust`、`modOrder`、`workshopOwners`、免责声明的键）进行的 `ES3` 写入；读取它们没有问题；
+- 对保存玩家批准记录和模组顺序的键（`modTrust`、`modTrustMac`、`modOrder`、`workshopOwners`、免责声明的键）进行的 `ES3` 写入；读取它们没有问题；
+- 调用信任层自己的写入方法：`ModLoader.SetModEnabled`、`ReorderMods`、`ForgetMod`、`ApproveAndEnable`、`SetDeveloperMode`，`ModTrust.Approve`、`Refresh`、`Revoke`、`MarkStopped`、`SetDeveloperMode`、`StoreFolderHash`，`ModTrustList.LoadUnsigned`、`TryFetchBlocking`，`ModWorkshop.Unsubscribe`。这些属于玩家的点击和游戏本身；运行时只要调用栈上有模组，游戏同样会拒绝它们。读取加载器（`ModLoader.Mods`、`IsModEnabled`、`ModTrust.Get`、`ModTrustList.Check`）是免费的，而且 `ModLoader.Mods` 是一份副本：增删其中的条目不会改变任何东西；
+- 2026 年 12 月 10 日的更新之后，所有 `reflection-external`、`native`、`dynamic-code` 和 `threads` 发现：扫描器看不透、或停不下来的能力不再是玩家可以批准的东西。其中包括在数据中指名代码并运行它：COM 激活（`Type.GetTypeFromProgID`、`GetTypeFromCLSID`、`Marshal.GetActiveObject`、`BindToMoniker`：一个 `WScript.Shell` 就能启动程序，而你的代码里从头到尾不出现 `Process`，算作 `reflection-external`），以及把 Newtonsoft 的 `TypeNameHandling` 设为 `None` 以外的值，无论是在设置中还是在 `[JsonProperty]` / `[JsonObject]` 特性中（反序列化器会实例化 JSON 指名的任何类型，算作 `dynamic-code`）。在那个日期之前它们只是警告；
 - 从游戏中发布或修改 Steam 创意工坊物品或 Steam 云文件：`SteamUGC` 中所有创建、更新、删除、订阅、下载或取消订阅物品的方法（`CreateItem`、`StartItemUpdate`、`SetItem*`、`SubmitItemUpdate` 等），以及所有 `SteamRemoteStorage` 写入。模组由作者用 steamcmd 发布，绝不由游戏通过玩家的账户发布；
 - 账户访问：`SteamUser` 身份验证和加密应用票证、商店登录 URL 和语音，`SteamFriends` 和 `SteamMatchmaking` 的聊天消息和邀请，`SteamAPI`（`IsSteamRunning` 除外）、`SteamClient`、游戏服务器 API、对 Steam 库的 `DllImport`，以及指向 Steam 原生库文件（`steam_api64.dll`）或其导出函数的字符串常量。游戏运行时也会拦截这些调用：被发现这样做的模组会被停止并停用，该版本在这台电脑上再也无法启用。唯一的例外是游戏通过 `ModHelper.RequestSteamAuthTicket` 在 `steam-auth` 能力下替你的服务器签发的身份验证会话票证（见[下文](#向你的服务器证明玩家的-steam-身份)）；
 - 自带 `0Harmony`、MonoMod 或 Cecil，或任何与游戏程序集同名的 DLL（包括游戏已经附带的库，例如 `Newtonsoft.Json`）。请引用游戏自带的副本；
-- 文件夹中有 `<Assemblies>` 未列出的 DLL，或者所列 DLL 引用了既不是游戏的、也未列出的程序集。运行时会不经扫描直接从你的文件夹加载这种文件，所以整个模组会被拒绝，直到清单把它列出来；
-- 扫描器无法读取的 DLL：无法解析的方法体或 `[HarmonyPatch]` 特性会导致模组被拒绝，而不是被跳过。
+- 文件夹中有 `<Assemblies>` 未列出的 DLL，或者所列 DLL 引用了既不是游戏的、未列出、也不是你 `<Prerequisites>` 中已安装模组所列程序集的程序集。运行时会不经扫描直接从你的文件夹加载这种文件，所以整个模组会被拒绝，直到清单把它列出来；
+- 扫描器无法读取的 DLL：无法解析的方法体或 `[HarmonyPatch]` 特性会导致模组被拒绝，而不是被跳过；
+- 自同一日期起，标有 `[ModRestricted]` 的游戏方法，它们代替调用者做上述规则拒绝或需要能力的事，无论你是调用还是修补它们（改写存档方法路径参数的 Prefix 与直接调用是同一回事；在那之前 `mod-scan` 把两者都列为 "files (from December 10, 2026)"，不计入任何能力）：`SaveFiles` 的每一个方法（玩家的存档文件夹：算作 `files`），`PaperEditorFiles.OpenFolder` / `OpenFile` 和 `ModUIManager.OpenModFolder`（用系统外壳打开文件夹或文件：像 `Process` 一样被拒绝）。标记指明规则；`mod-scan` 会显示原因。这个列表会随着游戏添加此类辅助方法而增长。
 
-你捆绑的第三方库会像你自己的代码一样被扫描，而且必须列出。其中许多在内部使用反射或 `Reflection.Emit`，这就需要写进你的 `<Capabilities>`；请优先使用游戏已经附带的库。图片、音频、JSON、XML 或 `.resources` 文件作为嵌入资源没有问题。
+你捆绑的第三方库会像你自己的代码一样被扫描，而且必须列出。其中许多在内部使用反射、`Reflection.Emit` 或指针，今天这需要写进你的 `<Capabilities>`，从 2026 年 12 月 10 日起则会导致模组被拒绝；请优先使用游戏已经附带的库（它们不会被扫描）。图片、音频、JSON、XML 或 `.resources` 文件作为嵌入资源没有问题。
 
 ### 发布前自查
 
 打开控制台（F8），运行 `mod-scan <你的模组ID>`（任何已列出的模组，启用与否均可）或 `mod-scan <文件夹路径>`。它会打印所列程序集、文件夹中未列出的 DLL、扫描了多少方法、清单声明的能力（`declared`）、扫描器检测到的能力（`detected`）、每条发现（格式为 `能力: 类型.方法 -> 引用了什么`）、所有一律拒绝的标记、某个 DLL 无法读取时的 `ERROR:` 行，以及一行 `fingerprint:`，即这个确切版本的哈希，批准记录和开发者名单引用的就是它，后面是每个所列 DLL 的哈希。修改清单直到 `declared` 覆盖 `detected` 且没有一律拒绝的标记。如果某条发现出乎意料，方法名告诉你该看哪里；大多数 `reflection-external` 发现改用 `typeof(...)` 就能消除。
+
+出现 `DEPRECATED` 行表示模组仍在使用 `reflection-external`、`native`、`dynamic-code` 中的某些能力（该行会指出是哪些）：今天仍被接受，2026 年 12 月 10 日的游戏更新将拒绝，所以请把这一行当作一律拒绝的标记来处理，修正它列出的位置（见[反射](#反射)和上面的能力表）。
 
 像玩家一样测试时还有两个有用的命令：`mod-trust` 列出这台电脑上记录的批准（哈希、能力、开发者模式，创意工坊模组还有物品和发布者 id）以及本次会话中每个模组的信任状态；`mod-trust-list` 显示开发者远程名单的状态。F8 控制台是 Quantum Console：`user-commands` 列出游戏自己的命令（`loot-list`、`mod-scan` 等），`all-commands` 列出全部命令，包括引擎级的。
 
@@ -1360,14 +1370,20 @@ public class MyMod : IMod
 
 - **启用**一个 `<Capabilities>` 为空的模组直接生效。声明了能力的模组会向玩家显示确认框，用通俗的话列出这些能力（"访问互联网"、"启动其他程序或打开链接"等），并提醒这样的模组能做玩家能做的任何事；被开发者列入验证名单的版本会跳过这个确认框。被拒绝的模组会显示原因。
 - 详情面板显示你的能力和批准状态：在某日批准、已更新但无新增能力、已由开发者验证，或者未加载的原因。
-- **更新**：文件完全一致则加载。文件变化但没有新增能力也会加载，面板会注明已更新。文件变化且新增了能力，或新版本未通过扫描，则不会加载；该行显示警告，面板提供**审核并启用**按钮，重新执行启用检查。请在首次发布前规划好能力：之后再新增会打断每一位玩家。
+- **更新**：文件完全一致则加载。文件变化但没有新增能力也会加载，面板会注明已更新。文件变化且新增了能力，或新版本未通过扫描，则不会加载；该行显示警告，面板提供**审核并启用**按钮，重新执行启用检查。请在首次发布前规划好能力：之后再新增会打断每一位玩家。批准覆盖文件夹中的每一个文件，而不只是 DLL：只替换了数据文件或贴图的更新同样会被重新检查（只做文件夹扫描，不做其他），所以载荷无法悄悄出现在已批准的 DLL 旁边。
 - **停用**会撤回批准；下次启用会重新经过检查。
-- 在远程**封禁名单**上的模组无法启用，在已启用它的机器上会在下次启动时被关闭，并显示原因（正在运行的副本会一直运行到那次重启）。紧急情况下，开发者可以暂停全部模组加载直到修复发布；"模组"菜单会说明，面板会显示"未加载：模组加载已被开发者暂停"。
+- 在远程**封禁名单**上的模组无法启用，在已启用它的机器上会被立即停止并在下次启动时关闭，并显示原因。停止意味着：它的 Harmony 补丁被移除，钩子订阅被取消，它自己类型的 MonoBehaviour 被销毁，它通过 `ModHelper` 启动的协程和后台工作被取消，它向其他模组暴露的内容被清除。只有该模组手动赋值的游戏委托（物品的 `onActivateSlotItemFunc` 之类）仍指向它的代码。紧急情况下，开发者可以暂停全部模组加载直到修复发布；"模组"菜单会说明，面板会显示"未加载：模组加载已被开发者暂停"。
 - 第一次打开"模组"菜单时，游戏仍会告诉玩家模组可能包含代码。
 
 ### 开发者模式
 
 在本地（`Mods/` 中）开发模组时，每次重新编译都会改变哈希。模组启用过一次之后，本地模组的详情面板会出现**开发者模式**按钮：打开后，该文件夹的每次重新编译都会在启动时直接加载而无需重新批准，即使新版本用到了你尚未声明的能力（只有扫描器直接拒绝时控制台才会警告）。它不覆盖两件事：文件夹中 `<Assemblies>` 未列出的 DLL 仍然会阻止模组加载；下一次**启用**或**审核并启用**仍然按完整规则检查，所以发布前请运行 `mod-scan`。它按模组、按电脑生效，默认关闭。创意工坊副本永远没有它；接管已订阅物品 id 的本地文件夹必须先以本地模组的身份批准一次，按钮才会出现。
+
+### 使用文件或互联网的创意工坊模组需要验证
+
+`files` 和 `network` 加在一起就是一个凭据窃取程序所需的全部，而仅凭确认框并没有阻止玩家批准它们。因此，**从 2026 年 12 月 10 日的游戏更新起，清单中声明了 `files` 或 `network` 的创意工坊模组只有在开发者验证之后才会加载**。在那之前，模组菜单会在这类模组上显示"使用了文件或互联网，且未经开发者验证"，`mod-scan` 会打印一行 `VERIFICATION`，其他没有变化；那个日期之后，启用会被拒绝，提示"这类模组只有在开发者验证之后才能启用"，已经启用的副本在条目存在之前也会停止加载。
+
+该怎么做：在发布需要这两种能力之一的模组之前，在模组频道申请验证，附上创意工坊物品以及模组读取、写入或通信的内容。开发者会运行 `mod-scan`，阅读做文件或网络工作的方法，然后把你的模组加入已签名的验证名单，要么只针对这个确切版本（下一个版本需要重新审核），要么针对你这个 id 的所有版本（适用于其发布本身就被信任的模组作者）。经过验证的模组还会跳过能力确认框，并在模组菜单中显示"已由开发者验证"。`Mods/` 中的本地文件夹永远不受此限制，所以你无需等待就能开发和测试。避开这个队列的最好办法是不需要这些能力：`ModData` 辅助方法覆盖了文件需求，而大多数模组没有理由访问互联网。
 
 ### 不声明能力也能读写文件
 
@@ -1483,7 +1499,7 @@ Harmony 是一个运行时修补库，让你能在游戏中任意方法之前、
 
 你不需要自己调用 `Harmony.PatchAll()`。游戏会扫描每个已加载的模组程序集，并应用它找到的每个 `[HarmonyPatch]` 类。只要声明补丁类（见下文），模组一启用它们就会生效。
 
-> ⚠️ **模组扫描器如何看待补丁。** 修补游戏代码不需要声明任何能力。玩家启用模组时有三种情况会被直接拒绝：针对加载器或信任代码（`ModLoader`、`ModTrust*`、`ModFingerprint`、`ModScanner`、`ModCapability`、`ModSecurityDebug`）的补丁；传入字面 `null` id 调用的 `Harmony.UnpatchAll()`（它会移除所有模组的补丁）；以及自带 `0Harmony.dll`。请使用游戏自带的副本。应用你补丁的 `Harmony` 实例由加载器持有（`ModLoader.Mods.Find(m => m.Manifest.ID == "my_mod_id").HarmonyInstance`，id 为 `"mod.my_mod_id"`）；如果你为手动应用的补丁创建了自己的实例，请用它自己的 id 撤销，绝不要不带 id。通过 `AccessTools` 或反射触及 Unity、.NET 或 Harmony 内部，或者在运行时用字符串拼出类型和成员名，都算作 `reflection-external` 能力；`typeof(游戏类型)` 和游戏类型的字面名称是免费的。详情见[能力声明与扫描器](#能力声明与扫描器)。
+> ⚠️ **模组扫描器如何看待补丁。** 修补游戏代码不需要声明任何能力。游戏之外的补丁目标按反射目标来判断：`[HarmonyPatch(typeof(System.IO.File), "WriteAllBytes")]`、`[HarmonyPatch("UnityEngine.Application", "OpenURL")]` 或用 `AccessTools.Method(typeof(某个系统类型), ...)` 取得的目标属于 `reflection-external`（已弃用，2026 年 12 月 10 日起拒绝）；你自己的类型、你的前置模组的类型以及 UI 命名空间 `UnityEngine.UI`、`TMPro`、`UnityEngine.EventSystems` 是免费的。Transpiler 按它指名的内容判断：`CodeInstruction.Call(typeof(X), "Y")`、`ldtoken`、`AccessTools` 和 `typeof(X).GetMethod` 遵循与其他地方相同的规则，所以生成一个对系统方法的调用会在指名该方法的地方被拒绝，而不是在运行时。运行时，在你的 Transpiler 改写过的方法内部执行的代码算作你的代码：游戏的绊线和 `ModHelper` 的归属检查会把它归到你的模组，所以一个被改写的游戏方法若启动了程序，会像直接调用一样让你的模组被停止。玩家启用模组时有三种情况会被直接拒绝：针对加载器或信任代码（`ModLoader`、`ModTrust*`、`ModFingerprint`、`ModScanner`、`ModCapability`、`ModSecurityDebug`）的补丁；传入字面 `null` id 调用的 `Harmony.UnpatchAll()`（它会移除所有模组的补丁）；以及自带 `0Harmony.dll`。请使用游戏自带的副本。应用你补丁的 `Harmony` 实例由加载器持有（`ModLoader.Mods.Find(m => m.Manifest.ID == "my_mod_id").HarmonyInstance`，id 为 `"mod.my_mod_id"`）；如果你为手动应用的补丁创建了自己的实例，请用它自己的 id 撤销，绝不要不带 id。通过 `AccessTools` 或反射触及 Unity、.NET 或 Harmony 内部，或者在运行时用字符串拼出类型和成员名，属于已弃用的 `reflection-external` 能力，2026 年 12 月 10 日的游戏更新将拒绝它；`typeof(游戏类型)` 和游戏类型的字面名称是免费的，而 `ModReflect.Target(type, "Method")` 能为只有运行时才知道名字的方法提供补丁目标。详情见[能力声明与扫描器](#能力声明与扫描器)和[反射](#反射)。
 
 ### Postfix：在原方法之后运行
 
@@ -1564,6 +1580,106 @@ public static class TweakClient
 
 ---
 
+## 反射
+
+只要扫描器能读出目标，对游戏类型的反射就是免费的：`typeof(PlayerStore).GetField("cash", ...)`、`AccessTools.Method(typeof(StoreClientManager), "GenerateClient")`、Harmony 的 `___privateField` 注入，或游戏类型的字面名称。扫描器读不出的东西它无法担保，所以其余的正在退出：拼接出的接收者（`someObject.GetType().GetField(...)`）、运行时拼出的类型或成员名、针对 `System.`、`UnityEngine.`（UI 命名空间除外）、`HarmonyLib.`、`Steamworks.` 或 `ES3` 之下任何内容的 `Type.GetType`，以及 `dynamic` 关键字。今天这些是带弃用警告的 `reflection-external` 能力；2026 年 12 月 10 日的游戏更新将拒绝它们，连同 `native` 和 `dynamic-code`，另外两种扫描器看不透的能力。
+
+**`ModReflect`** 是替代方案。你把对象或名称交给它，游戏替你查找成员，并在调用那一刻检查该成员的声明类型是否在你的模组可触及的范围内：
+
+- 游戏自己的类型，模组加载器和信任类型（`ModLoader`、`ModTrust*`、`ModScanner`、`ModSteam*`、`ModWorkshop`、`SteamManager`、`PaperBookRegistry`、`ModReflect` 自身）以及 Easy Save 类型除外；
+- 你自己的程序集；
+- 你的清单在 `<Prerequisites>` 中列出的模组的程序集，前提是它们正在运行；
+- 引擎 UI 命名空间 `UnityEngine.UI`、`TMPro` 和 `UnityEngine.EventSystems`。
+
+检查沿基类进行：`MonoBehaviour` 声明的私有字段即使通过游戏的子类也触及不到。超出范围会抛出 `ModReflectAccessException`（并为每个成员记录一次 `[ModReflect]` 警告），不存在的成员、对只读属性 `Set`、有歧义的重载也是如此。调用 `ModReflect` 不需要任何能力。
+
+```csharp
+// 游戏对象的私有字段，对象的确切类型编译时未知
+int stock = ModReflect.Get<int>(machine, "stockCount");
+ModReflect.Set(machine, "stockCount", stock + 1);
+
+// 私有方法，按参数类型选择重载（有歧义时传入 Type[]）
+ModReflect.Call(PlayerStore.Instance, "ModCash", 100, false);
+object result = ModReflect.Call(client, "Evaluate", new[] { typeof(GameItem), typeof(bool) }, item, true);
+
+// 静态成员，按类型或按名称
+var client = ModReflect.Get<StoreClientInstance>(PlayerStore.Instance, "currentClientInstance");
+bool inRun = ModReflect.GetStatic<bool>(typeof(PlayerStore), "HasInstance");
+ModReflect.CallStatic("GeneralHelper", "SetItemOwned", item, true);
+
+// 你自己的配置文件中指名的类型（游戏、你的模组、你的前置模组、UI 命名空间）
+Type behaviour = ModReflect.FindType(config.behaviourTypeName);
+object instance = ModReflect.New(behaviour, someArgument);
+
+// 供每帧运行的代码使用的已绑定委托（查找只做一次）
+var tick = ModReflect.Method<Action<float>>(machine, "Tick");
+tick(Time.deltaTime);
+
+// 运行时才知道名字的方法的 Harmony 补丁目标
+MethodBase target = ModReflect.Target(typeof(StoreClientManager), "GenerateClient");
+harmony.Patch(target, postfix: new HarmonyMethod(typeof(MyPatches), nameof(MyPatches.After)));
+```
+
+`Has(obj, "member")` 告诉你某个字段或属性是否存在；`Types()` 列出游戏的类型，`Types("other_mod")` 列出某个前置模组的类型，供数据驱动的查找使用。泛型重载会替你做类型转换：值不是 `T` 时 `Get<T>` 会抛出异常。
+
+`ModReflect` 不做的事：触及 `System.*` 或非 UI 的 `UnityEngine.*` 成员（请为具体需求申请一个 `ModHelper` 入口），或触及不是前置模组的另一个模组（把它列为前置，或用下面的消息通道）。控制台命令 `mod-reflect` 列出本次会话中游戏拒绝的每一次查找及其原因。
+
+## 依赖另一个模组
+
+把你的模组需要的模组列在 `<Prerequisites>` 中。由此带来三件事：
+
+- **你可以引用它们的 DLL。** 在你的 `.csproj` 中添加指向前置模组 DLL 的 `<Reference>`，然后像任何库一样调用它的公开 API。扫描器接受该引用（否则会是 `unlisted-reference` 拒绝），加载器先加载前置模组再加载指名它们的模组，你的 DLL 的依赖在前置模组运行后从它的文件夹解析。不要把前置模组的 DLL 复制进你的文件夹（未列出的 DLL 会让你的模组被拒绝，列出的副本则是它们代码的第二个未经批准的版本）。
+- **`ModReflect` 能触及它们的类型。** `ModReflect.FindType`、`Types("their_id")`、`Get`、`Call` 等把正在运行的前置模组的程序集当作你自己的。
+- **模组菜单显示依赖关系**，打勾或打叉，前置模组缺失或未启用时玩家会看到警告。缺少前置模组仍然是警告而不是拒绝：只是可选地与另一个模组集成的模组继续加载，而 DLL 确实需要另一个模组的模组会自行加载失败，加载错误会指出缺少的程序集。
+
+需要松耦合、硬引用又嫌多的时候，`ModHelper` 中有两条通道，双方都不需要反射，也不需要依赖：
+
+```csharp
+// 提供方模组在某个键下暴露一个对象（它的 DLL 定义的接口，或普通委托）
+ModHelper.Expose("provider_mod", "pricing", new PricingService());
+ModHelper.Expose("provider_mod", "bonus", (Func<GameItem, int>)ComputeBonus);
+
+// 另一个模组取出它；提供方没有运行或没有在该键下暴露任何东西时为 null
+var bonus = ModHelper.Lookup<Func<GameItem, int>>("provider_mod", "bonus");
+if (bonus != null) price += bonus(item);
+bool present = ModHelper.IsModRunning("provider_mod");
+
+// 具名频道上的即发即忘事件："senderId:channel"
+ModHelper.OnMessage("listener_mod", "provider_mod:sold", (sender, payload) => OnSold((GameItem)payload));
+ModHelper.SendMessage("provider_mod", "sold", item);   // 只有 provider_mod 能在自己的频道上发送
+```
+
+模组只能在自己的 id 下暴露、只能在自己的频道上发送（和数据文件夹一样，检查的是调用栈上的模组）；任何模组都可以监听。`Lookup` 有一条规则：服务带有提供方的能力，所以只有自己的清单声明了提供方声明的全部能力的模组才能拿到服务（没有任何能力的模组不能从一个 `files` 模组那里借用文件辅助对象；拒绝会记录一次日志，`Lookup` 返回 null）。想服务所有人的提供方应暴露一个不需要能力的服务，或者自己不声明任何能力。处理器像钩子订阅者一样在各自的 try/catch 中运行。当加载器停止某个模组时，它暴露的内容和注册的处理器都会被清除，此后 `Lookup` 返回 null。
+
+## 后台工作
+
+当开发者封禁某个模组或暂停全部模组时，游戏会立即停止它：补丁、钩子、组件、协程。模组自己启动的线程、计时器或任务没有人能停止，这就是为什么启动它们属于 `threads` 能力，已弃用并自 2026 年 12 月 10 日起拒绝。你改用的这些以游戏的名义运行，并随模组一起结束：
+
+```csharp
+// 游戏加载器对象上的协程；模组被停止时一并停止。每一步都在各自的 try/catch 中运行：
+// 异常会结束协程，并以你的模组名记录日志。
+Coroutine handle = ModHelper.StartCoroutine("my_mod", RefreshPrices());
+ModHelper.StopCoroutine("my_mod", handle);
+ModHelper.StopAllCoroutines("my_mod");
+
+// 延迟动作，不受时间缩放影响的秒数
+ModHelper.Delay("my_mod", 2f, () => log.Log("two seconds later"));   // log：你在 Init 里创建的 ModLog
+
+// 线程池上的工作，然后在主线程回调。模组被停止时令牌会被取消：在循环中检查它。
+// 如果模组在此期间被停止，回调会被丢弃。
+ModHelper.RunInBackground("my_mod", token =>
+{
+    for (int i = 0; i < 1000 && !token.IsCancellationRequested; i++) Crunch(i);
+}, onFinished: () => ApplyResults());
+
+// 在后台工作内部：把一件事交给主线程
+ModHelper.RunOnMainThread("my_mod", () => UpdateLabel());
+```
+
+在你自己的 `MonoBehaviour`（你添加到游戏对象上的组件）里，`this.StartCoroutine`、`Invoke` 和 `InvokeRepeating` 仍然免费：组件会随模组一起销毁。在别的对象的 MonoBehaviour 上做同样的调用（`ModLoader.Instance.StartCoroutine(...)`、某个游戏管理器）属于 `threads`，因为那个对象比你活得久。`async` 方法只要不触及 `Task.Run`、`Task.Delay` 或 `ContinueWith` 就没有问题；比如在 `network` 能力下等待一个 `UnityWebRequest` 不需要它们中的任何一个。
+
+---
+
 ## 故障排查
 
 先打开 **F8 控制台**：每个模组都会记录它的加载结果、资源数量以及修补了多少个 Harmony 方法，全部带有 `[ModLoader]` 或你的模组名前缀。
@@ -1573,16 +1689,21 @@ public static class TweakClient
 | 模组没有出现在模组菜单中 | 清单缺失或无效，加载器跳过了该文件夹：模组根目录没有 `manifest.xml`，`<ID>` 为空或无效（只允许字母、数字、`_`、`-`、`.`），缺少 `<Assemblies>` 或 `<Capabilities>` 元素，`<Assemblies>` 下没有 `<Assembly>`，程序集路径是绝对路径、含有 `..` 或不以 `.dll` 结尾，能力名称未知（这些都记录为 `[ModLoader] ...`），或者所列 DLL 不存在、所列 DLL 中没有实现 `IMod` 的类（记录为 `[你的模组名] Error: ...`）。启动日志会指出确切问题。 |
 | 模组出现了但什么都没发生 | 模组没有启用，或者启用后没有重启。**启用、禁用和重新排序都要到下次启动才生效。** |
 | 模组已启用，但显示警告图标和"未加载：……" | 这次启动信任检查没有放行它。*尚未在这台电脑上批准*：选中它并点击**审核并启用**。*自你批准后已更改（原因）*：你的文件以需要重新批准的方式变化了；原因是以下之一："新版本需要新的能力"、"新版本使用了未声明的能力"、"新版本被模组扫描器拒绝"、"文件夹中包含清单未列出的 DLL"、"它现在来自与已批准副本不同的地方"或"它是另一个创意工坊物品"（本地副本与订阅之间切换）、"无法检查它的文件"（DLL 被你的编译或杀毒软件锁定）。按提示修正，再**审核并启用**。*已被开发者封禁*：该版本在远程封禁名单上。*模组加载已被开发者暂停*：面向所有人的紧急暂停，你这边无需做任何事。开发本地模组时，在详情面板打开**开发者模式**，重新编译就无需这一步。 |
-| 启用被拒绝：使用了清单未声明的能力（"uses capabilities its manifest does not declare"） | 在 F8 控制台运行 `mod-scan <id>`：每条发现都指出方法和它触及的 API。要么在 `<Capabilities>` 中声明该能力，要么改用无需能力的替代方案（见[声明能力](#声明能力)中的表格）。大多数 `reflection-external` 发现改用 `typeof(游戏类型)` 代替字符串就能消除。 |
+| 启用被拒绝：使用了清单未声明的能力（"uses capabilities its manifest does not declare"） | 在 F8 控制台运行 `mod-scan <id>`：每条发现都指出方法和它触及的 API。要么在 `<Capabilities>` 中声明该能力，要么改用无需能力的替代方案（见[声明能力](#声明能力)中的表格）。大多数 `reflection-external` 发现改用 `typeof(游戏类型)` 代替字符串就能消除，其余的改走 [`ModReflect`](#反射)。 |
+| 模组菜单在我的模组上显示"使用了下一次游戏更新将拒绝的能力（……）"，或 `mod-scan` 打印了 `DEPRECATED` 行 | 你的模组使用了 `reflection-external`、`native`、`dynamic-code` 或 `threads`，或者清单声明了它们。今天它仍会加载；2026 年 12 月 10 日的更新之后就不会了。`mod-scan` 列出每一处：拼接出的接收者改为 `typeof(...)`，运行时的名称改用 [`ModReflect`](#反射)，反射进另一个模组改为 `<Prerequisites>` 引用，编译的表达式树改用 `ModReflect.Method<TDelegate>`，对引擎或系统方法的补丁改为对游戏代码的补丁，线程、计时器和任务改用 [`ModHelper.StartCoroutine` / `RunInBackground`](#后台工作)，去掉 `DllImport` 和 `unsafe` 代码，然后从 `<Capabilities>` 中删掉这些能力，并在 2026 年 12 月 10 日之前发布你的更新。在那之前，本次更新新增规则发现的内容（线程、游戏之外的补丁目标、COM 激活、`TypeNameHandling`、`[ModRestricted]` 辅助方法）不会阻止启用，并会显示在玩家的确认框中；本次更新之前扫描器就能检测到的内容（通过既有规则发现的 `reflection-external`、`native`、`dynamic-code`）仍然必须像以前一样声明。 |
+| 启用被拒绝："声明了模组已不能再使用的能力"（"declares capabilities mods can no longer use"） | 拒绝 `reflection-external`、`native`、`dynamic-code` 和 `threads` 的游戏更新已经发布，而清单仍声明其中之一，或代码仍在使用。修法同上一行。 |
+| `mod-scan` 指出某个游戏方法并附有"(... named by the caller)"或"(opens a ... with the shell)" | 该方法带有 `[ModRestricted]`：它代替你做规则拒绝或需要能力的事。这条发现按它指明的规则计算（`files`，或 `process` 式的拒绝）。文件请用 `ModData` 辅助方法，不要用系统外壳打开文件夹或文件。 |
+| `ModReflectAccessException: ... is out of reach` | 该成员的声明类型超出了你的范围：引擎或系统类型（只有 `UnityEngine.UI`、`TMPro` 和 `UnityEngine.EventSystems` 可触及）、加载器或 Easy Save 类型，或不在你 `<Prerequisites>` 中的另一个模组。控制台的 `mod-reflect` 列出被拒绝的查找及原因。 |
 | 启用被拒绝：被模组扫描器拒绝（"refused by the mod scanner"），或文件夹中有清单未列出的 DLL（"DLLs in its folder that its manifest does not list"） | 一律拒绝的情况：文件夹中有未列出的 DLL，或引用了既不是游戏的也未列出的程序集；嵌入了可执行文件或加密资源；可疑的字符串常量；传入 `null` id 的 `UnpatchAll()`；针对加载器的补丁；或自带 `0Harmony`。`mod-scan` 会指出是哪一条。见[一律拒绝的情况](#一律拒绝的情况)。 |
 | 控制台中出现 `[你的模组名] Error: ...`，模组菜单中你的模组旁有警告图标 | 你的 DLL 加载失败（缺少它引用的库，或目标框架不对），某个 DLL 使用了游戏程序集的名字，或者 `Init`、`OnEnable` 或某个 Harmony 补丁抛出了异常。这一行写明了异常，后面紧跟完整的堆栈跟踪。`Mods/` 文件夹中的模组加载失败时，控制台会在启动时自动打开（需要 `dev.txt` 存在；创意工坊模组只显示警告图标）。该模组仍留在已启用列表中，方便你停用它。 |
 | 代码改动没有生效 | 你复制的是旧 DLL。重新构建（`dotnet build -c Release`）；用 `create-mod.bat` 创建的项目会自动安装到 `Mods\`，否则把 `bin/Release/netstandard2.1/` 中新鲜的 DLL 复制到模组文件夹。然后看一下模组菜单：重新编译会改变哈希，没有打开**开发者模式**时模组可能在等待**审核并启用**。 |
-| 我捆绑的库被拒绝，或迫使我声明能力 | 你附带的每个 DLL 都必须列在 `<Assemblies>` 中，并且会像你的代码一样被扫描。游戏已经附带的库（`0Harmony`、`Newtonsoft.Json`、Unity 程序集）完全不能捆绑；请引用游戏的副本。其他在内部使用 `Reflection.Emit` 或反射的库，会让这些能力变成你需要声明的能力。 |
+| 我捆绑的库被拒绝，或迫使我声明能力 | 你附带的每个 DLL 都必须列在 `<Assemblies>` 中，并且会像你的代码一样被扫描。游戏已经附带的库（`0Harmony`、`Newtonsoft.Json`、Unity 程序集）完全不能捆绑；请引用游戏的副本。其他在内部使用 `Reflection.Emit`、按名称反射或指针的库，今天会让这些能力变成你需要声明的能力，从 2026 年 12 月 10 日起则会导致模组被拒绝：选一个不这样做的库，或者不用它来实现该功能。 |
 | 物品显示"未知"占位精灵图 | 传给 `SetSpriteAndShapeFromMod` 的 `spriteKey` 或模组 ID 不匹配。键是**文件名**（不含扩展名和文件夹）；ID 是你清单中的 `<ID>`，**不是**文件夹名。检查控制台中的 `item sprite(s) loaded` 数量。 |
 | 某个精灵图文件被完全忽略 | 它没有*直接*放在 `Textures/Items/` 下（子文件夹不会被扫描），或者它不是 `.png`/`.jpg`。 |
 | `PlaySound` 返回 false / 警告 `Audio identifier ... was not found` | 模组 ID 或声音键不匹配。完整标识是 `<清单 ID>:<不含扩展名的文件名>`。检查控制台中的 `sound(s) loaded` 数量。声音也会在启动后几帧才加载完成（如果播放得很早，请[等待它们](#如何知道资源已就绪)）。 |
 | `GetLocalized` 返回键本身 | 当前语言的 CSV 或 `en.csv` 中没有该键的条目，或者文件名与游戏的语言代码不匹配。查找一次性的 `[ModHelper]` 警告，并检查控制台中的 `localization entries loaded` 数量。 |
 | 警告 `requires '<id>' which is not loaded/enabled` | 你的清单在 `<Prerequisites>` 中列出的模组没有启用。启用它，或者去掉这个依赖。 |
+| 我的模组引用了另一个模组的 DLL，被以 `unlisted-reference` 拒绝，或因缺少程序集而加载失败 | 另一个模组必须列在你的 `<Prerequisites>` 中且已安装（扫描器只接受对前置模组所列 DLL 的引用），并且必须已启用，因为加载器要等那个模组运行后才从它的文件夹解析 DLL。绝不要把它的 DLL 复制进你的文件夹。见[依赖另一个模组](#依赖另一个模组)。 |
 | Harmony 补丁从不运行 | 目标类型/方法名写错了，或者模组被禁用了；补丁只在启动时应用于**已启用**的模组。 |
 | 我的物品从不掉落 | 在控制台运行 `loot-list <tableId>`。如果条目不在，说明表 ID 写错了或编辑被拒绝了（查找指明你的模组的 `[LootRegistry]` 警告）。如果在，检查百分比：原版表中权重 `10` 约为 1%。 |
 | 警告 `[LootRegistry] ... which does not exist` | 你的编辑或 JSON 文件中的表或表组 ID 与任何表都不匹配。`loot-list` 会打印所有 ID。注册自己的表时，先注册，再对它打补丁或加入表组。 |
