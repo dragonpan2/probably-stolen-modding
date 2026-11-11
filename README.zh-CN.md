@@ -130,7 +130,7 @@ Probably Stolen/
   <ModVersion>1.0</ModVersion>
   <Description>A test mod for demonstration purposes.</Description>
   <GameVersions>
-    <Version>0.46</Version>
+    <Version>1.0.0</Version>
   </GameVersions>
   <Prerequisites />
   <Assemblies>
@@ -146,7 +146,7 @@ Probably Stolen/
 - **Author**：你的名字或用户名。
 - **ModVersion**：模组的版本号。
 - **Description**：对模组功能的简短描述。
-- **GameVersions**：模组兼容的游戏版本列表。每个支持的版本写一条 `<Version>`。
+- **GameVersions**：你的模组所针对的游戏版本，每个写一条 `<Version>`。游戏版本由四个数字组成，主版本.次版本.补丁.修订：商店标签 `100-Rev14` 就是 `1.0.0.14`。一个条目覆盖以它为前缀的所有版本，所以 `1.0.0` 覆盖 1.0.0 的每个修订版，大多数模组这样写即可；也可以写闭区间，例如 `1.0.0.5 - 1.0.1`。"模组"菜单会给每个条目着色，没有任何条目覆盖当前游戏时向玩家显示警告；它绝不会阻止模组加载。详情：[游戏版本](ModdingGuide.zh-CN.md#游戏版本)。
 - **Prerequisites**：必须在你的模组之前加载的其他模组的 ID。没有依赖时保留空标签（`<Prerequisites />`）。每个依赖写一条 `<Mod>`：
 
 ```xml
@@ -156,7 +156,7 @@ Probably Stolen/
 ```
 
 - **Assemblies**：必填。游戏要加载的 DLL，以相对于模组文件夹的路径填写，每个 `<Assembly>` 一条，按加载顺序排列。文件夹中的其他任何 DLL 都会导致启用被拒绝（已启用的模组也不会加载），直到把它列出或删除，因为运行时会不经扫描直接加载它。与游戏或框架程序集同名的 DLL（`0Harmony`、`Assembly-CSharp`、`UnityEngine.*`、`Steamworks.NET` 等）会被拒绝。
-- **Capabilities**：必填，通常为空（`<Capabilities />`）。声明你的代码在游戏 API 之外做了什么：`files`、`network`、`process`、`steam`、`steam-auth`。另有四种正在退出（`dynamic-code`、`native`、`reflection-external`、`threads`：今天带警告接受，2026 年 12 月 10 日起拒绝），并且从那天起，声明了 `files` 或 `network` 的创意工坊模组只有在开发者验证之后才会加载。玩家启用你的模组时，游戏会扫描你的 DLL：用到却未声明的能力会导致启用被拒绝，已声明的能力会在玩家确认前展示给玩家。用控制台命令 `mod-scan <你的模组ID>` 自查。详情：[能力声明与扫描器](ModdingGuide.zh-CN.md#能力声明与扫描器)。
+- **Capabilities**：必填，通常为空（`<Capabilities />`）。声明你的代码在游戏 API 之外做了什么：`files`、`network`、`process`、`steam`、`steam-auth`、`window`。另有四种正在退出（`dynamic-code`、`native`、`reflection-external`、`threads`：今天带警告接受，2026 年 12 月 10 日起拒绝）。玩家启用你的模组时，游戏会扫描你的 DLL：用到却未声明的能力会导致启用被拒绝，已声明的能力会在玩家确认前展示给玩家。用控制台命令 `mod-scan <你的模组ID>` 自查。详情：[能力声明与扫描器](ModdingGuide.zh-CN.md#能力声明与扫描器)。
 
 ### 编写模组
 

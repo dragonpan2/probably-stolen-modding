@@ -130,7 +130,7 @@ Create a file named `manifest.xml` and fill in your mod's information:
   <ModVersion>1.0</ModVersion>
   <Description>A test mod for demonstration purposes.</Description>
   <GameVersions>
-    <Version>0.46</Version>
+    <Version>1.0.0</Version>
   </GameVersions>
   <Prerequisites />
   <Assemblies>
@@ -146,7 +146,7 @@ Field descriptions:
 - **Author**: Your name or username.
 - **ModVersion**: The version of your mod.
 - **Description**: A short description of what your mod does.
-- **GameVersions**: The list of game versions your mod is compatible with. Add one `<Version>` entry per supported version.
+- **GameVersions**: The game versions your mod was made for, one `<Version>` entry each. The game's version is four numbers, major.minor.patch.revision: the store label `100-Rev14` is `1.0.0.14`. An entry covers every version it is a prefix of, so `1.0.0` covers every revision of 1.0.0 and is what most mods should write; a closed range such as `1.0.0.5 - 1.0.1` works too. The Mods menu colours each entry and warns the player when none covers the running game; it never keeps a mod from loading. Details: [Game Versions](ModdingGuide.md#game-versions).
 - **Prerequisites**: The IDs of other mods that must be loaded before yours. Leave the tag empty (`<Prerequisites />`) if there are none. Add one `<Mod>` entry per dependency:
 
 ```xml
@@ -156,7 +156,7 @@ Field descriptions:
 ```
 
 - **Assemblies**: Required. The DLLs the game loads, as paths relative to the mod folder, one `<Assembly>` each, in load order. Any other DLL in the folder refuses the activation (and keeps an active mod from loading) until it is listed or removed, because the runtime would load it unscanned. A DLL named like a game or framework assembly (`0Harmony`, `Assembly-CSharp`, `UnityEngine.*`, `Steamworks.NET`, ...) is refused.
-- **Capabilities**: Required, and usually empty (`<Capabilities />`). Declares what your code does beyond the game's API: `files`, `network`, `process`, `steam`, `steam-auth`. Four more exist but are on their way out (`dynamic-code`, `native`, `reflection-external`, `threads`: accepted with a warning today, refused from December 10, 2026), and from that date a Workshop mod declaring `files` or `network` loads only once the developers have verified it. When a player activates your mod the game scans your DLLs: a capability you use but did not declare refuses the activation, and declared capabilities are shown to the player before they approve. Check yours with the console command `mod-scan <your_mod_id>`. Details: [Capabilities and the Scanner](ModdingGuide.md#capabilities-and-the-scanner).
+- **Capabilities**: Required, and usually empty (`<Capabilities />`). Declares what your code does beyond the game's API: `files`, `network`, `process`, `steam`, `steam-auth`, `window`. Four more exist but are on their way out (`dynamic-code`, `native`, `reflection-external`, `threads`: accepted with a warning today, refused from December 10, 2026). When a player activates your mod the game scans your DLLs: a capability you use but did not declare refuses the activation, and declared capabilities are shown to the player before they approve. Check yours with the console command `mod-scan <your_mod_id>`. Details: [Capabilities and the Scanner](ModdingGuide.md#capabilities-and-the-scanner).
 
 ### Write your mod
 

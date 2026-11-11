@@ -98,7 +98,7 @@ echo.
 echo  The game version your mod targets is shown in the Mods menu (compatibility
 echo  colour). You can read it in the game's main menu. Leave empty to skip.
 set "GAMEVER="
-set /p "GAMEVER= Game version (for example 0.46): "
+set /p "GAMEVER= Game version (for example 1.0.0): "
 
 :: XML-escape the free text (& < > are what matters in element text; quotes are fine there).
 for %%V in (NAME AUTHOR VERSION DESC GAMEVER) do (
