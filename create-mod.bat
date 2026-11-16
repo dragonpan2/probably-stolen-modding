@@ -115,7 +115,7 @@ echo  About to create:
 echo    !PROJDIR!\!PROJ!.csproj      project, builds into Mods\!PROJ!\
 echo    !PROJDIR!\manifest.xml       ID !MODID!, name "!NAME!", version !VERSION!
 echo    !PROJDIR!\ModEntry.cs        the IMod class
-echo    !PROJDIR!\Textures\Items\    plus Sounds\, Localization\, LootTables\, Books\
+echo    !PROJDIR!\Assets\Textures\Items\    plus Sounds\, Localization\, LootTables\, Books\
 echo.
 set "OK="
 set /p "OK= Continue? [Y/n]: "
@@ -123,11 +123,11 @@ if /i "!OK!"=="n" goto cancelled
 
 :: ---------------------------------------------------------------- folders
 mkdir "!PROJDIR!" || goto fail
-mkdir "!PROJDIR!\Textures\Items"
-mkdir "!PROJDIR!\Sounds"
-mkdir "!PROJDIR!\Localization"
-mkdir "!PROJDIR!\LootTables"
-mkdir "!PROJDIR!\Books"
+mkdir "!PROJDIR!\Assets\Textures\Items"
+mkdir "!PROJDIR!\Assets\Sounds"
+mkdir "!PROJDIR!\Assets\Localization"
+mkdir "!PROJDIR!\Assets\LootTables"
+mkdir "!PROJDIR!\Assets\Books"
 
 :: ---------------------------------------------------------------- csproj
 set "F=!PROJDIR!\!PROJ!.csproj"
@@ -166,8 +166,8 @@ set "F=!PROJDIR!\!PROJ!.csproj"
 >>"!F!" echo.
 >>"!F!" echo   ^<^^!-- Files that ship with the mod besides the DLL: the manifest and the asset folders. --^>
 >>"!F!" echo   ^<ItemGroup^>
->>"!F!" echo     ^<ModFile Include="manifest.xml;preview.png;Textures\**;Sounds\**;Localization\**;LootTables\**;Books\**" /^>
->>"!F!" echo     ^<None Remove="Textures\**;Sounds\**;Localization\**;LootTables\**;Books\**" /^>
+>>"!F!" echo     ^<ModFile Include="manifest.xml;preview.png;Assets\**" /^>
+>>"!F!" echo     ^<None Remove="Assets\**" /^>
 >>"!F!" echo   ^</ItemGroup^>
 >>"!F!" echo.
 >>"!F!" echo   ^<^^!-- After every build, install the mod into ^<game^>\Mods\!PROJ!\ so the game picks it up. --^>
